@@ -1,8 +1,15 @@
+/**
+ * Dashboard Screen
+ * Displays the user's credit score, factors, recent loan applications, and
+ * quick actions, backed by the real backend (/api/credit/calculate-score,
+ * /api/credit/history, /api/loans/applications).
+ */
+
 import { useNavigation } from "@react-navigation/native";
-import { Icon } from "@rneui/themed";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,12 +17,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Icon } from "@rneui/themed";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
+  calculateScore,
+  fetchCreditHistory,
   fetchCreditScore,
-  fetchScoreFactors,
 } from "../store/slices/creditSlice";
-import { fetchBorrowerLoans } from "../store/slices/loanSlice";
+import { fetchMyLoanApplications } from "../store/slices/loanSlice";
 import {
   responsiveFontSize,
   responsiveHeight,
@@ -25,77 +34,88 @@ import {
 const colors = {
   primary: "#4A90E2",
   accent: "#50E3C2",
-  secondaryAccent: "#F5A623",
   background: "#F8F9FA",
   cardBackground: "#FFFFFF",
   textPrimary: "#333333",
   textSecondary: "#777777",
   border: "#EAEAEA",
-  success: "#50E3C2",
-  info: "#4A90E2",
+  success: "#2ECC71",
   warning: "#F5A623",
   error: "#D0021B",
 };
 
+const SCORE_MIN = 300;
+const SCORE_MAX = 850;
+
+const gradeColor: Record<string, string> = {
+  Excellent: colors.success,
+  "Very Good": colors.success,
+  Good: colors.primary,
+  Fair: colors.warning,
+  Poor: colors.error,
+};
+
 const DashboardScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
+
   const { user } = useAppSelector((state) => state.auth);
-  const {
-    score,
-    scoreFactors,
-    isLoading: creditLoading,
-  } = useAppSelector((state) => state.credit);
-  const { loans, isLoading: loansLoading } = useAppSelector(
-    (state) => state.loan,
-  );
+  const { score, scoreFactors, history, isLoading, error, needsWallet } =
+    useAppSelector((state) => state.credit);
+  const { applications } = useAppSelector((state) => state.loan);
 
-  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
-  const loadData = async () => {
-    if (user?.walletAddress) {
-      try {
-        await Promise.all([
-          dispatch(fetchCreditScore(user.walletAddress)).unwrap(),
-          dispatch(fetchScoreFactors(user.walletAddress)).unwrap(),
-          dispatch(fetchBorrowerLoans(user.walletAddress)).unwrap(),
-        ]);
-      } catch (error) {
-        console.error("Error loading data:", error);
-      }
-    }
-  };
+  const walletAddress = user?.profile?.wallet_address || undefined;
+
+  const loadDashboard = useCallback(() => {
+    dispatch(fetchCreditScore(walletAddress));
+    dispatch(fetchCreditHistory({ page: 1, perPage: 20 }));
+    dispatch(fetchMyLoanApplications({ page: 1, perPage: 5 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddress]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadDashboard();
+  }, [loadDashboard]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    loadDashboard();
     setRefreshing(false);
   };
 
-  const userScore = score?.score || 750;
-  const scorePercentage = (userScore / 1000) * 100;
-  let scoreDescription = "Good";
-  let scoreColor = colors.info;
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      await dispatch(calculateScore(walletAddress)).unwrap();
+    } catch (err: any) {
+      Alert.alert("Error", err || "Failed to recalculate credit score");
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
-  if (userScore >= 800) {
-    scoreDescription = "Excellent";
-    scoreColor = colors.success;
-  } else if (userScore >= 700) {
-    scoreDescription = "Good";
-    scoreColor = colors.success;
-  } else if (userScore >= 600) {
-    scoreDescription = "Fair";
-    scoreColor = colors.warning;
-  } else {
-    scoreDescription = "Needs Improvement";
-    scoreColor = colors.warning;
+  const activeApplications = applications.filter((app) =>
+    ["approved", "disbursed", "under_review", "submitted"].includes(app.status),
+  ).length;
+
+  if (isLoading && !score && !needsWallet) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading your dashboard...</Text>
+      </View>
+    );
   }
 
-  const activeLoans = loans.filter((loan) => !loan.isRepaid && loan.isApproved);
+  const scorePercentage = score
+    ? ((score.score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)) * 100
+    : 0;
+  const scoreColor = score
+    ? gradeColor[score.score_grade] || colors.primary
+    : colors.textSecondary;
 
   return (
     <ScrollView
@@ -105,77 +125,119 @@ const DashboardScreen = () => {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Credit Dashboard</Text>
+        <Text style={styles.headerTitle}>BlockScore</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate("Profile" as never)}
           style={styles.profileButton}
+          onPress={() => navigation.navigate("Profile")}
         >
-          <Icon
-            name="person"
-            type="material"
-            color={colors.cardBackground}
-            size={responsiveFontSize(2.5)}
-          />
+          <Icon name="person" type="material" color={colors.cardBackground} />
         </TouchableOpacity>
       </View>
 
-      {creditLoading && !score ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading your credit data...</Text>
+      {needsWallet ? (
+        <View style={styles.walletPrompt}>
+          <Icon
+            name="account-balance-wallet"
+            type="material"
+            color={colors.primary}
+            size={responsiveFontSize(4)}
+          />
+          <Text style={styles.walletPromptText}>
+            Add a wallet address to your profile to calculate your credit score.
+          </Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate("Profile")}
+          >
+            <Text style={styles.actionButtonText}>Go to Profile</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <>
-          <View style={styles.scoreContainer}>
-            <Text style={styles.scoreLabel}>Your BlockScore</Text>
-            <Text style={[styles.scoreValue, { color: scoreColor }]}>
-              {userScore}
-            </Text>
-            <View style={styles.scoreBar}>
-              <View
-                style={[
-                  styles.scoreProgress,
-                  { width: `${scorePercentage}%`, backgroundColor: scoreColor },
-                ]}
-              />
+          {error ? (
+            <View style={styles.walletPrompt}>
+              <Icon name="error-outline" type="material" color={colors.error} />
+              <Text style={styles.walletPromptText}>{error}</Text>
             </View>
-            <Text style={[styles.scoreDescription, { color: scoreColor }]}>
-              {scoreDescription}
-            </Text>
-          </View>
+          ) : (
+            <View style={styles.scoreContainer}>
+              <Text style={styles.scoreLabel}>Your Credit Score</Text>
+              <Text style={[styles.scoreValue, { color: scoreColor }]}>
+                {score?.score ?? "-"}
+              </Text>
+              <View style={styles.scoreBar}>
+                <View
+                  style={[
+                    styles.scoreProgress,
+                    {
+                      width: `${Math.max(0, Math.min(100, scorePercentage))}%`,
+                      backgroundColor: scoreColor,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.scoreDescription, { color: scoreColor }]}>
+                {score?.score_grade || "Not calculated"}
+              </Text>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.recalculateButton]}
+                onPress={handleRecalculate}
+                disabled={recalculating}
+              >
+                {recalculating ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <Icon
+                      name="refresh"
+                      type="material"
+                      color={colors.primary}
+                      size={responsiveFontSize(2)}
+                      containerStyle={styles.buttonIcon}
+                    />
+                    <Text style={styles.recalculateButtonText}>
+                      Recalculate
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
               <Icon
-                name="trending-up"
+                name="verified"
                 type="material"
-                color={colors.success}
-                size={responsiveFontSize(3.5)}
+                color={colors.primary}
+                size={responsiveFontSize(2.5)}
               />
-              <Text style={styles.statTitle}>Credit Growth</Text>
-              <Text style={styles.statValue}>+15%</Text>
+              <Text style={styles.statTitle}>Model Confidence</Text>
+              <Text style={styles.statValue}>
+                {score ? `${Math.round(score.confidence * 100)}%` : "-"}
+              </Text>
             </View>
             <View style={styles.statCard}>
               <Icon
                 name="history"
                 type="material"
-                color={colors.info}
-                size={responsiveFontSize(3.5)}
+                color={colors.primary}
+                size={responsiveFontSize(2.5)}
               />
-              <Text style={styles.statTitle}>History Length</Text>
+              <Text style={styles.statTitle}>History Events</Text>
               <Text style={styles.statValue}>
-                {score?.lastUpdated ? "5 years" : "New"}
+                {history?.pagination?.total ?? 0}
               </Text>
             </View>
             <View style={styles.statCard}>
               <Icon
                 name="account-balance"
                 type="material"
-                color={colors.warning}
-                size={responsiveFontSize(3.5)}
+                color={colors.primary}
+                size={responsiveFontSize(2.5)}
               />
               <Text style={styles.statTitle}>Active Loans</Text>
-              <Text style={styles.statValue}>{activeLoans.length}</Text>
+              <Text style={styles.statValue}>{activeApplications}</Text>
             </View>
           </View>
 
@@ -183,58 +245,73 @@ const DashboardScreen = () => {
             <View style={styles.factorsContainer}>
               <Text style={styles.sectionTitle}>Score Factors</Text>
               {scoreFactors.map((factor, index) => (
-                <View key={index} style={styles.factorItem}>
+                <View key={`${factor.name}-${index}`} style={styles.factorItem}>
                   <Icon
-                    name={factor.icon}
+                    name="insights"
                     type="material"
-                    color={factor.color}
-                    size={responsiveFontSize(3)}
-                    style={styles.factorIcon}
+                    color={colors.primary}
+                    size={responsiveFontSize(2.2)}
+                    containerStyle={styles.factorIcon}
                   />
                   <View style={styles.factorTextContainer}>
                     <Text style={styles.factorName}>{factor.name}</Text>
-                    <Text style={styles.factorImpact}>
-                      Impact: {factor.impact}
-                    </Text>
+                    {factor.description ? (
+                      <Text style={styles.factorImpact}>
+                        {factor.description}
+                      </Text>
+                    ) : null}
                   </View>
-                  <Text style={[styles.factorStatus, { color: factor.color }]}>
-                    {factor.status}
+                  <Text
+                    style={[
+                      styles.factorStatus,
+                      {
+                        color:
+                          factor.value >= 70
+                            ? colors.success
+                            : factor.value >= 40
+                              ? colors.warning
+                              : colors.error,
+                      },
+                    ]}
+                  >
+                    {factor.value}
                   </Text>
                 </View>
               ))}
             </View>
           )}
-
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate("LoanCalculator" as never)}
-            >
-              <Icon
-                name="calculate"
-                type="material"
-                color={colors.cardBackground}
-                size={responsiveFontSize(2.5)}
-                style={styles.buttonIcon}
-              />
-              <Text style={styles.actionButtonText}>Calculate Loan</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate("CreditHistory" as never)}
-            >
-              <Icon
-                name="timeline"
-                type="material"
-                color={colors.cardBackground}
-                size={responsiveFontSize(2.5)}
-                style={styles.buttonIcon}
-              />
-              <Text style={styles.actionButtonText}>View History</Text>
-            </TouchableOpacity>
-          </View>
         </>
       )}
+
+      <View style={styles.actionsContainer}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate("LoanCalculator")}
+        >
+          <Icon
+            name="calculate"
+            type="material"
+            color={colors.cardBackground}
+            size={responsiveFontSize(2.2)}
+            containerStyle={styles.buttonIcon}
+          />
+          <Text style={styles.actionButtonText}>Loan Calculator</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate("CreditHistory")}
+        >
+          <Icon
+            name="receipt-long"
+            type="material"
+            color={colors.cardBackground}
+            size={responsiveFontSize(2.2)}
+            containerStyle={styles.buttonIcon}
+          />
+          <Text style={styles.actionButtonText}>View Credit History</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 };
@@ -416,6 +493,39 @@ const styles = StyleSheet.create({
     color: colors.cardBackground,
     fontSize: responsiveFontSize(2.2),
     fontWeight: "bold",
+  },
+  walletPrompt: {
+    alignItems: "center",
+    backgroundColor: colors.cardBackground,
+    marginHorizontal: responsiveWidth(5),
+    marginTop: responsiveHeight(3),
+    marginBottom: responsiveHeight(2),
+    padding: responsiveHeight(3),
+    borderRadius: 15,
+    elevation: 3,
+  },
+  walletPromptText: {
+    fontSize: responsiveFontSize(1.9),
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginVertical: responsiveHeight(2),
+  },
+  recalculateButton: {
+    flexDirection: "row",
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingVertical: responsiveHeight(1.2),
+    paddingHorizontal: responsiveWidth(4),
+    marginTop: responsiveHeight(2),
+    marginBottom: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  recalculateButtonText: {
+    color: colors.primary,
+    fontSize: responsiveFontSize(1.8),
+    fontWeight: "600",
   },
 });
 

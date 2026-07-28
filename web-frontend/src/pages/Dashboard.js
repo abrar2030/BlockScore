@@ -1,5 +1,8 @@
+import RefreshIcon from "@mui/icons-material/Refresh";
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -10,6 +13,8 @@ import {
   useTheme,
 } from "@mui/material";
 import { motion } from "framer-motion";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import CreditFactors from "../components/dashboard/CreditFactors";
 // Components
 import CreditScoreGauge from "../components/dashboard/CreditScoreGauge";
@@ -17,13 +22,39 @@ import QuickActions from "../components/dashboard/QuickActions";
 import TransactionHistory from "../components/dashboard/TransactionHistory";
 import { useAuth } from "../contexts/AuthContext";
 import { useCredit } from "../contexts/CreditContext";
-import { useWeb3 } from "../contexts/Web3Context";
+
+const gradeColor = {
+  Excellent: "success",
+  "Very Good": "success",
+  Good: "primary",
+  Fair: "warning",
+  Poor: "error",
+};
 
 const Dashboard = () => {
   const _theme = useTheme();
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const { accounts } = useWeb3();
-  const { creditData, loading, error, fetchCreditScore } = useCredit();
+  const {
+    creditData,
+    history,
+    loading,
+    error,
+    needsWallet,
+    recalculateCreditScore,
+  } = useCredit();
+  const [recalculating, setRecalculating] = useState(false);
+
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      await recalculateCreditScore();
+    } catch {
+      // Error state is already surfaced via the credit context.
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -51,9 +82,34 @@ const Dashboard = () => {
           Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Welcome back! Here's your current credit status and history.
+          Welcome back{user?.email ? `, ${user.email}` : ""}! Here's your
+          current credit status and history.
         </Typography>
       </Box>
+
+      {needsWallet && (
+        <Alert
+          severity="info"
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => navigate("/profile")}
+            >
+              Add wallet
+            </Button>
+          }
+        >
+          Add a wallet address to your profile to calculate your credit score.
+        </Alert>
+      )}
+
+      {error && !needsWallet && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* Credit Score Card */}
@@ -85,40 +141,34 @@ const Dashboard = () => {
                   color="text.secondary"
                   align="center"
                 >
-                  Last updated: {new Date().toLocaleDateString()}
+                  {creditData?.calculated_at
+                    ? `Last updated: ${new Date(
+                        creditData.calculated_at,
+                      ).toLocaleDateString()}`
+                    : "Not calculated yet"}
                 </Typography>
 
                 <Divider sx={{ width: "100%", my: 2 }} />
 
-                <Box sx={{ width: "100%" }}>
+                <Box sx={{ width: "100%", textAlign: "center" }}>
                   <Typography variant="body2" gutterBottom>
                     Score Category:
                   </Typography>
                   <Chip
-                    label={
-                      creditData?.score >= 750
-                        ? "Excellent"
-                        : creditData?.score >= 700
-                          ? "Good"
-                          : creditData?.score >= 650
-                            ? "Fair"
-                            : creditData?.score >= 600
-                              ? "Poor"
-                              : "Very Poor"
-                    }
-                    color={
-                      creditData?.score >= 750
-                        ? "success"
-                        : creditData?.score >= 700
-                          ? "primary"
-                          : creditData?.score >= 650
-                            ? "info"
-                            : creditData?.score >= 600
-                              ? "warning"
-                              : "error"
-                    }
-                    sx={{ fontWeight: 500 }}
+                    label={creditData?.score_grade || "Not available"}
+                    color={gradeColor[creditData?.score_grade] || "default"}
+                    sx={{ fontWeight: 500, mb: 2 }}
                   />
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    startIcon={<RefreshIcon />}
+                    onClick={handleRecalculate}
+                    disabled={recalculating}
+                  >
+                    {recalculating ? "Recalculating..." : "Recalculate Score"}
+                  </Button>
                 </Box>
               </CardContent>
             </Card>
@@ -132,15 +182,7 @@ const Dashboard = () => {
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <Card sx={{ height: "100%" }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Credit Factors
-                </Typography>
-
-                <CreditFactors features={creditData?.features} />
-              </CardContent>
-            </Card>
+            <CreditFactors scoreBreakdown={creditData?.score_breakdown} />
           </motion.div>
         </Grid>
 
@@ -163,22 +205,14 @@ const Dashboard = () => {
           </motion.div>
         </Grid>
 
-        {/* Transaction History */}
+        {/* Credit History */}
         <Grid item xs={12}>
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
           >
-            <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Transaction History
-                </Typography>
-
-                <TransactionHistory history={creditData?.history || []} />
-              </CardContent>
-            </Card>
+            <TransactionHistory history={history} />
           </motion.div>
         </Grid>
       </Grid>

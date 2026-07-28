@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { logoutUser, updateWallet } from "../store/slices/authSlice";
+import { logoutUser, updateUserProfile } from "../store/slices/authSlice";
 import {
   responsiveFontSize,
   responsiveHeight,
@@ -34,7 +34,9 @@ const ProfileScreen = () => {
   const navigation = useNavigation();
   const dispatch = useAppDispatch();
   const { user, isLoading } = useAppSelector((state) => state.auth);
-  const [walletAddress, setWalletAddress] = useState(user?.walletAddress || "");
+  const [walletAddress, setWalletAddress] = useState(
+    user?.profile?.wallet_address || "",
+  );
   const [isEditing, setIsEditing] = useState(false);
 
   const handleUpdateWallet = async () => {
@@ -44,7 +46,9 @@ const ProfileScreen = () => {
     }
 
     try {
-      await dispatch(updateWallet(walletAddress)).unwrap();
+      await dispatch(
+        updateUserProfile({ wallet_address: walletAddress }),
+      ).unwrap();
       Alert.alert("Success", "Wallet address updated successfully");
       setIsEditing(false);
     } catch (error: any) {
@@ -90,8 +94,10 @@ const ProfileScreen = () => {
             size={responsiveFontSize(10)}
           />
         </View>
-        <Text style={styles.username}>{user?.username}</Text>
-        <Text style={styles.role}>{user?.role}</Text>
+        <Text style={styles.username}>
+          {user?.profile?.full_name?.trim() || user?.email}
+        </Text>
+        <Text style={styles.role}>{user?.email}</Text>
       </View>
 
       <View style={styles.infoCard}>
@@ -133,7 +139,7 @@ const ProfileScreen = () => {
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => {
-                  setWalletAddress(user?.walletAddress || "");
+                  setWalletAddress(user?.profile?.wallet_address || "");
                   setIsEditing(false);
                 }}
               >

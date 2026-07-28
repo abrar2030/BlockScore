@@ -6,8 +6,8 @@
 import axios, {
   type AxiosError,
   type AxiosInstance,
-  type AxiosRequestConfig,
   type AxiosResponse,
+  type InternalAxiosRequestConfig,
 } from "axios";
 import { API_CONFIG } from "../config/api.config";
 import { clearToken, getToken } from "./storage.service";
@@ -27,7 +27,7 @@ const httpClient: AxiosInstance = axios.create({
  * Request interceptor to add auth token
  */
 httpClient.interceptors.request.use(
-  async (config: AxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     try {
       const token = await getToken();
       if (token && config.headers) {

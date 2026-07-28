@@ -33,7 +33,7 @@ const colors = {
 };
 
 const RegisterScreen = ({ navigation }: any) => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,14 +42,16 @@ const RegisterScreen = ({ navigation }: any) => {
   const dispatch = useAppDispatch();
   const { isLoading, error } = useAppSelector((state) => state.auth);
 
+  const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
+
   const handleRegister = async () => {
-    if (!username.trim()) {
-      Alert.alert("Error", "Please enter a username");
+    if (!email.trim()) {
+      Alert.alert("Error", "Please enter your email address");
       return;
     }
 
-    if (username.length < 3) {
-      Alert.alert("Error", "Username must be at least 3 characters");
+    if (!isValidEmail(email)) {
+      Alert.alert("Error", "Please enter a valid email address");
       return;
     }
 
@@ -58,8 +60,8 @@ const RegisterScreen = ({ navigation }: any) => {
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+    if (password.length < 8) {
+      Alert.alert("Error", "Password must be at least 8 characters");
       return;
     }
 
@@ -69,13 +71,11 @@ const RegisterScreen = ({ navigation }: any) => {
     }
 
     try {
-      await dispatch(registerUser({ username, password })).unwrap();
-      Alert.alert("Success", "Account created successfully! Please log in.", [
-        {
-          text: "OK",
-          onPress: () => navigation.navigate("Login"),
-        },
-      ]);
+      await dispatch(
+        registerUser({ email, password, confirmPassword }),
+      ).unwrap();
+      // Registration signs the user in too; navigation is handled in
+      // App.tsx based on auth state.
     } catch (err: any) {
       Alert.alert("Registration Failed", err || "Could not create account");
     }
@@ -121,7 +121,7 @@ const RegisterScreen = ({ navigation }: any) => {
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
             <Icon
-              name="person"
+              name="email"
               type="material"
               color={colors.textSecondary}
               size={responsiveFontSize(2.5)}
@@ -129,12 +129,13 @@ const RegisterScreen = ({ navigation }: any) => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Username"
+              placeholder="Email address"
               placeholderTextColor={colors.textSecondary}
-              value={username}
-              onChangeText={setUsername}
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType="email-address"
             />
           </View>
 

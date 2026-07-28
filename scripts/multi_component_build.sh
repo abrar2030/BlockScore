@@ -2,15 +2,22 @@
 # ========================================================================
 # BlockScore Multi-Component Build Orchestration Script
 #
-# This script automates the build process for all BlockScore components
-# in the correct order with proper dependency management.
+# This script automates the build/validation process for all BlockScore
+# components in the correct order.
 #
 # Features:
 # - Parallel or sequential build options
 # - Selective component building
-# - Dependency tracking between components
 # - Build status reporting
 # - Error handling and recovery
+#
+# Components map to real project directories as follows:
+#   backend    -> code/backend       (Python/Flask; "build" = install deps)
+#   blockchain -> code/blockchain    (Truffle; "build" = compile contracts)
+#   frontend   -> web-frontend       (Create React App; "build" = npm run build)
+#   mobile     -> mobile-frontend    (React Native; "build" = install + typecheck + test,
+#                                      since there is no universal RN build command)
+#   ai         -> code/ai_models     (Python; "build" = install training deps)
 # ========================================================================
 
 # Set strict error handling
@@ -23,8 +30,9 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Define project directory
-PROJECT_DIR="$(pwd)"
+# Resolve the project root relative to this script's own location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIG_DIR="${PROJECT_DIR}/.blockscore_config"
 BUILD_LOG="${PROJECT_DIR}/build.log"
 
@@ -51,12 +59,11 @@ print_usage() {
   echo ""
   echo "Components:"
   echo "  all                        Build all components (default)"
-  echo "  shared                     Build shared libraries"
-  echo "  blockchain                 Build blockchain contracts"
-  echo "  backend                    Build backend services"
-  echo "  frontend                   Build frontend application"
-  echo "  mobile                     Build mobile application"
-  echo "  ai                         Build AI models"
+  echo "  blockchain                 Compile blockchain contracts (Truffle)"
+  echo "  backend                    Install backend dependencies (Python/Flask)"
+  echo "  frontend                   Build the web frontend (Create React App)"
+  echo "  mobile                     Install, typecheck, and test the mobile app"
+  echo "  ai                         Install AI model training dependencies"
   echo ""
   echo "Examples:"
   echo "  $0                         Build all components sequentially"
@@ -79,7 +86,7 @@ while [[ $# -gt 0 ]]; do
       CLEAN_BUILD=true
       shift
       ;;
-    all|shared|blockchain|backend|frontend|mobile|ai)
+    all|blockchain|backend|frontend|mobile|ai)
       COMPONENTS+=("$1")
       shift
       ;;
@@ -93,14 +100,20 @@ done
 
 # If no components specified, build all
 if [ ${#COMPONENTS[@]} -eq 0 ]; then
-  COMPONENTS=("shared" "blockchain" "backend" "frontend" "mobile" "ai")
+  COMPONENTS=("blockchain" "backend" "frontend" "mobile" "ai")
+fi
+
+# "all" expands to every real component
+if [[ " ${COMPONENTS[*]} " == *" all "* ]]; then
+  COMPONENTS=("blockchain" "backend" "frontend" "mobile" "ai")
 fi
 
 # Function to log messages
 log_message() {
   local level=$1
   local message=$2
-  local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+  local timestamp
+  timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
   echo "[$timestamp] [$level] $message" >> "$BUILD_LOG"
 
@@ -128,9 +141,6 @@ component_exists() {
   local component=$1
 
   case $component in
-    shared)
-      [ -d "${PROJECT_DIR}/code/shared" ]
-      ;;
     blockchain)
       [ -d "${PROJECT_DIR}/code/blockchain" ]
       ;;
@@ -138,7 +148,7 @@ component_exists() {
       [ -d "${PROJECT_DIR}/code/backend" ]
       ;;
     frontend)
-      [ -d "${PROJECT_DIR}/code/frontend" ]
+      [ -d "${PROJECT_DIR}/web-frontend" ]
       ;;
     mobile)
       [ -d "${PROJECT_DIR}/mobile-frontend" ]
@@ -150,8 +160,6 @@ component_exists() {
       return 1
       ;;
   esac
-
-  return $?
 }
 
 # Function to clean a component
@@ -161,30 +169,22 @@ clean_component() {
   log_message "INFO" "Cleaning component: $component"
 
   case $component in
-    shared)
-      if [ -d "${PROJECT_DIR}/code/shared" ]; then
-        cd "${PROJECT_DIR}/code/shared"
-        rm -rf node_modules dist
-        rm -f package-lock.json yarn.lock
-      fi
-      ;;
     blockchain)
       if [ -d "${PROJECT_DIR}/code/blockchain" ]; then
         cd "${PROJECT_DIR}/code/blockchain"
-        rm -rf node_modules artifacts cache
-        rm -f package-lock.json yarn.lock
+        rm -rf build
       fi
       ;;
     backend)
       if [ -d "${PROJECT_DIR}/code/backend" ]; then
         cd "${PROJECT_DIR}/code/backend"
-        rm -rf node_modules dist
-        rm -f package-lock.json yarn.lock
+        find . -name "__pycache__" -type d -prune -exec rm -rf {} +
+        rm -rf .pytest_cache
       fi
       ;;
     frontend)
-      if [ -d "${PROJECT_DIR}/code/frontend" ]; then
-        cd "${PROJECT_DIR}/code/frontend"
+      if [ -d "${PROJECT_DIR}/web-frontend" ]; then
+        cd "${PROJECT_DIR}/web-frontend"
         rm -rf node_modules build
         rm -f package-lock.json yarn.lock
       fi
@@ -199,7 +199,8 @@ clean_component() {
     ai)
       if [ -d "${PROJECT_DIR}/code/ai_models" ]; then
         cd "${PROJECT_DIR}/code/ai_models"
-        rm -rf __pycache__ .pytest_cache
+        find . -name "__pycache__" -type d -prune -exec rm -rf {} +
+        rm -rf .pytest_cache
         find . -name "*.pyc" -delete
       fi
       ;;
@@ -207,6 +208,17 @@ clean_component() {
 
   cd "${PROJECT_DIR}"
   log_message "SUCCESS" "Component cleaned: $component"
+}
+
+# Ensure the shared Python virtual environment exists and is activated.
+# Callers are responsible for deactivating when done.
+ensure_venv() {
+  if [ ! -d "${PROJECT_DIR}/venv" ]; then
+    python3 -m venv "${PROJECT_DIR}/venv"
+  fi
+  # shellcheck source=/dev/null
+  source "${PROJECT_DIR}/venv/bin/activate"
+  pip install --upgrade pip > /dev/null
 }
 
 # Function to build a component
@@ -222,20 +234,15 @@ build_component() {
   fi
 
   case $component in
-    shared)
-      if [ -d "${PROJECT_DIR}/code/shared" ]; then
-        cd "${PROJECT_DIR}/code/shared"
-        npm install || build_status=$?
-        npm run build || build_status=$?
-      else
-        log_message "WARNING" "Shared component directory not found, skipping"
-      fi
-      ;;
     blockchain)
       if [ -d "${PROJECT_DIR}/code/blockchain" ]; then
         cd "${PROJECT_DIR}/code/blockchain"
-        npm install || build_status=$?
-        npx hardhat compile || build_status=$?
+        if command -v npx &> /dev/null; then
+          npx --yes truffle compile || build_status=$?
+        else
+          log_message "ERROR" "npx not found; cannot run Truffle. Install Node.js and Truffle."
+          build_status=1
+        fi
       else
         log_message "WARNING" "Blockchain component directory not found, skipping"
       fi
@@ -243,26 +250,37 @@ build_component() {
     backend)
       if [ -d "${PROJECT_DIR}/code/backend" ]; then
         cd "${PROJECT_DIR}/code/backend"
-        npm install || build_status=$?
-        npm run build || build_status=$?
+        if [ -f "requirements.txt" ]; then
+          ensure_venv
+          pip install -r requirements.txt || build_status=$?
+          deactivate
+        else
+          log_message "WARNING" "requirements.txt not found for backend, skipping dependency install"
+        fi
       else
         log_message "WARNING" "Backend component directory not found, skipping"
       fi
       ;;
     frontend)
-      if [ -d "${PROJECT_DIR}/code/frontend" ]; then
-        cd "${PROJECT_DIR}/code/frontend"
+      if [ -d "${PROJECT_DIR}/web-frontend" ]; then
+        cd "${PROJECT_DIR}/web-frontend"
         npm install || build_status=$?
         npm run build || build_status=$?
       else
-        log_message "WARNING" "Frontend component directory not found, skipping"
+        log_message "WARNING" "Web frontend component directory not found, skipping"
       fi
       ;;
     mobile)
       if [ -d "${PROJECT_DIR}/mobile-frontend" ]; then
         cd "${PROJECT_DIR}/mobile-frontend"
         npm install || build_status=$?
-        npm run build || build_status=$?
+        # React Native has no universal "build" command outside native
+        # tooling (Xcode/Gradle) or EAS, so validate the component the way
+        # CI would: type-check and run the test suite.
+        if [ -f "tsconfig.json" ] && command -v npx &> /dev/null; then
+          npx tsc --noEmit || build_status=$?
+        fi
+        npm test -- --watchAll=false || build_status=$?
       else
         log_message "WARNING" "Mobile component directory not found, skipping"
       fi
@@ -270,17 +288,17 @@ build_component() {
     ai)
       if [ -d "${PROJECT_DIR}/code/ai_models" ]; then
         cd "${PROJECT_DIR}/code/ai_models"
-        # Activate virtual environment if it exists
-        if [ -d "${PROJECT_DIR}/venv" ]; then
-          source "${PROJECT_DIR}/venv/bin/activate"
+        local requirements_file="training_scripts/requirements.txt"
+        if [ -f "$requirements_file" ]; then
+          ensure_venv
+          pip install -r "$requirements_file" || build_status=$?
+          deactivate
+        else
+          log_message "WARNING" "requirements.txt not found for AI models, skipping dependency install"
         fi
-        # Install requirements if requirements.txt exists
-        if [ -f "requirements.txt" ]; then
-          pip install -r requirements.txt || build_status=$?
-        fi
-        # Run build script if it exists
+        # Run a build/packaging script if the component defines one.
         if [ -f "build.py" ]; then
-          python build.py || build_status=$?
+          "${PROJECT_DIR}/venv/bin/python" build.py || build_status=$?
         fi
       else
         log_message "WARNING" "AI models component directory not found, skipping"
@@ -290,13 +308,13 @@ build_component() {
 
   cd "${PROJECT_DIR}"
 
-  if [ $build_status -eq 0 ]; then
+  if [ "$build_status" -eq 0 ]; then
     log_message "SUCCESS" "Component built successfully: $component"
   else
     log_message "ERROR" "Failed to build component: $component"
   fi
 
-  return $build_status
+  return "$build_status"
 }
 
 # Function to build components in parallel
@@ -324,10 +342,10 @@ build_parallel() {
     local component=${result%%:*}
     local pid=${result#*:}
 
-    wait $pid
-    local status=$?
+    local status=0
+    wait "$pid" || status=$?
 
-    if [ $status -ne 0 ]; then
+    if [ "$status" -ne 0 ]; then
       failed_components+=("$component")
     fi
 
@@ -355,10 +373,10 @@ build_sequential() {
 
   for component in "${COMPONENTS[@]}"; do
     if component_exists "$component"; then
-      build_component "$component"
-      local status=$?
+      local status=0
+      build_component "$component" || status=$?
 
-      if [ $status -ne 0 ]; then
+      if [ "$status" -ne 0 ]; then
         failed_components+=("$component")
       fi
     else
@@ -378,16 +396,19 @@ build_sequential() {
 # Function to create build completion marker
 create_build_marker() {
   local status=$1
-  local build_date=$(date "+%Y-%m-%d %H:%M:%S")
+  local build_date
+  build_date=$(date "+%Y-%m-%d %H:%M:%S")
 
   mkdir -p "${CONFIG_DIR}"
 
-  echo "{
-  \"build_completed\": true,
-  \"build_status\": \"$status\",
-  \"build_date\": \"$build_date\",
-  \"components\": [$(printf "\"%s\"," "${COMPONENTS[@]}" | sed 's/,$//')]
-}" > "${CONFIG_DIR}/build_complete.json"
+  cat > "${CONFIG_DIR}/build_complete.json" << EOF
+{
+  "build_completed": true,
+  "build_status": "$status",
+  "build_date": "$build_date",
+  "components": [$(printf "\"%s\"," "${COMPONENTS[@]}" | sed 's/,$//')]
+}
+EOF
 
   log_message "INFO" "Build completion marker created"
 }
@@ -400,15 +421,14 @@ main() {
   mkdir -p "${CONFIG_DIR}"
 
   # Build components
+  local build_status=0
   if [ "$PARALLEL_BUILD" = true ]; then
-    build_parallel
+    build_parallel || build_status=$?
   else
-    build_sequential
+    build_sequential || build_status=$?
   fi
 
-  local build_status=$?
-
-  if [ $build_status -eq 0 ]; then
+  if [ "$build_status" -eq 0 ]; then
     create_build_marker "success"
     log_message "SUCCESS" "Build completed successfully"
     echo -e "${GREEN}Build completed successfully!${NC}"
@@ -422,7 +442,7 @@ main() {
   echo -e "${BLUE}Build Log: $BUILD_LOG${NC}"
   echo -e "${BLUE}================================================================${NC}"
 
-  return $build_status
+  return "$build_status"
 }
 
 # Execute main function

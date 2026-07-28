@@ -1,80 +1,51 @@
 /**
  * Loan Slice
- * Redux slice for loan management
+ * Redux slice for loan calculation and application management, backed by the
+ * real backend (/api/loans/calculate, /api/loans/apply,
+ * /api/loans/applications).
  */
 
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import type { Loan, LoanCalculation } from "../../services/loan.service";
+import type {
+  LoanApplication,
+  LoanApplicationRequest,
+  LoanCalculationResult,
+} from "../../services/loan.service";
 import * as loanService from "../../services/loan.service";
 
 export interface LoanState {
-  loans: Loan[];
-  currentLoan: Loan | null;
-  calculation: LoanCalculation | null;
+  applications: LoanApplication[];
+  calculation: LoanCalculationResult | null;
   isLoading: boolean;
+  isApplying: boolean;
   error: string | null;
+  applySuccess: LoanApplication | null;
 }
 
 const initialState: LoanState = {
-  loans: [],
-  currentLoan: null,
+  applications: [],
   calculation: null,
   isLoading: false,
+  isApplying: false,
   error: null,
+  applySuccess: null,
 };
 
 /**
- * Async thunk for fetching loans by borrower
+ * Calculate estimated loan terms.
  */
-export const fetchBorrowerLoans = createAsyncThunk(
-  "loan/fetchBorrowerLoans",
-  async (address: string, { rejectWithValue }) => {
-    try {
-      const loans = await loanService.getLoansByBorrower(address);
-      return loans;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
-    }
-  },
-);
-
-/**
- * Async thunk for fetching loan by ID
- */
-export const fetchLoanById = createAsyncThunk(
-  "loan/fetchById",
-  async (loanId: number, { rejectWithValue }) => {
-    try {
-      const loan = await loanService.getLoanById(loanId);
-      return loan;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
-    }
-  },
-);
-
-/**
- * Async thunk for creating a loan
- */
-export const createNewLoan = createAsyncThunk(
-  "loan/create",
+export const calculateLoanTerms = createAsyncThunk(
+  "loan/calculate",
   async (
-    loanData: {
-      amount: number;
-      interestRate: number;
-      durationDays: number;
-      privateKey: string;
-    },
+    params: { amount: number; rate: number; termMonths: number },
     { rejectWithValue },
   ) => {
     try {
-      const result = await loanService.createLoan(
-        loanData.amount,
-        loanData.interestRate,
-        loanData.durationDays,
-        loanData.privateKey,
+      return await loanService.calculateLoan(
+        params.amount,
+        params.rate,
+        params.termMonths,
       );
-      return result;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -82,8 +53,40 @@ export const createNewLoan = createAsyncThunk(
 );
 
 /**
- * Loan slice
+ * Submit a loan application.
  */
+export const submitLoanApplication = createAsyncThunk(
+  "loan/apply",
+  async (request: LoanApplicationRequest, { rejectWithValue }) => {
+    try {
+      return await loanService.applyForLoan(request);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+/**
+ * Fetch the current user's submitted loan applications.
+ */
+export const fetchMyLoanApplications = createAsyncThunk(
+  "loan/fetchApplications",
+  async (
+    params: { page?: number; perPage?: number } | undefined,
+    { rejectWithValue },
+  ) => {
+    try {
+      const result = await loanService.getMyLoanApplications(
+        params?.page,
+        params?.perPage,
+      );
+      return result.applications;
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
 const loanSlice = createSlice({
   name: "loan",
   initialState,
@@ -91,63 +94,66 @@ const loanSlice = createSlice({
     clearLoanError: (state) => {
       state.error = null;
     },
+    clearApplySuccess: (state) => {
+      state.applySuccess = null;
+    },
     resetLoans: (state) => {
-      state.loans = [];
-      state.currentLoan = null;
+      state.applications = [];
       state.calculation = null;
       state.error = null;
-    },
-    setLoanCalculation: (state, action) => {
-      state.calculation = action.payload;
+      state.applySuccess = null;
     },
   },
   extraReducers: (builder) => {
-    // Fetch borrower loans
-    builder.addCase(fetchBorrowerLoans.pending, (state) => {
+    // Calculate loan terms
+    builder.addCase(calculateLoanTerms.pending, (state) => {
       state.isLoading = true;
       state.error = null;
     });
-    builder.addCase(fetchBorrowerLoans.fulfilled, (state, action) => {
+    builder.addCase(calculateLoanTerms.fulfilled, (state, action) => {
       state.isLoading = false;
-      state.loans = action.payload;
+      state.calculation = action.payload;
       state.error = null;
     });
-    builder.addCase(fetchBorrowerLoans.rejected, (state, action) => {
+    builder.addCase(calculateLoanTerms.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
     });
 
-    // Fetch loan by ID
-    builder.addCase(fetchLoanById.pending, (state) => {
-      state.isLoading = true;
+    // Submit loan application
+    builder.addCase(submitLoanApplication.pending, (state) => {
+      state.isApplying = true;
+      state.error = null;
+      state.applySuccess = null;
+    });
+    builder.addCase(submitLoanApplication.fulfilled, (state, action) => {
+      state.isApplying = false;
+      state.applySuccess = action.payload;
+      state.applications = [action.payload, ...state.applications];
       state.error = null;
     });
-    builder.addCase(fetchLoanById.fulfilled, (state, action) => {
-      state.isLoading = false;
-      state.currentLoan = action.payload;
-      state.error = null;
-    });
-    builder.addCase(fetchLoanById.rejected, (state, action) => {
-      state.isLoading = false;
+    builder.addCase(submitLoanApplication.rejected, (state, action) => {
+      state.isApplying = false;
       state.error = action.payload as string;
     });
 
-    // Create loan
-    builder.addCase(createNewLoan.pending, (state) => {
+    // Fetch my loan applications
+    builder.addCase(fetchMyLoanApplications.pending, (state) => {
       state.isLoading = true;
       state.error = null;
     });
-    builder.addCase(createNewLoan.fulfilled, (state) => {
+    builder.addCase(fetchMyLoanApplications.fulfilled, (state, action) => {
       state.isLoading = false;
+      state.applications = action.payload;
       state.error = null;
     });
-    builder.addCase(createNewLoan.rejected, (state, action) => {
+    builder.addCase(fetchMyLoanApplications.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
     });
   },
 });
 
-export const { clearLoanError, resetLoans, setLoanCalculation } =
+export const { clearLoanError, clearApplySuccess, resetLoans } =
   loanSlice.actions;
 export default loanSlice.reducer;

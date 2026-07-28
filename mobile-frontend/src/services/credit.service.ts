@@ -1,183 +1,177 @@
 /**
  * Credit Service
- * Handles credit score and credit history operations
+ * Fetches and calculates credit scores against the real backend
+ * (code/backend/app.py: /api/credit/calculate-score, /api/credit/history).
  */
 
 import { API_CONFIG } from "../config/api.config";
 import httpClient from "./http.client";
 
-export interface CreditScore {
+export interface ScoreBreakdown {
+  total_score?: number;
+  payment_history?: number;
+  credit_utilization?: number;
+  length_of_history?: number;
+  credit_mix?: number;
+  new_credit?: number;
+  income_stability?: number;
+  debt_to_income?: number;
+  blockchain_activity?: number;
+}
+
+export interface CreditFactor {
+  factor_type: string;
+  factor_name: string;
+  factor_description?: string;
+  normalized_value: number;
+  contribution: number;
+  impact?: string;
+}
+
+export interface CreditScoreResult {
+  credit_score_id: string;
   score: number;
-  address: string;
-  lastUpdated?: number;
+  score_grade: string;
+  model_version: string;
+  calculated_at: string;
+  expires_at: string;
+  is_valid: boolean;
+  score_breakdown: ScoreBreakdown;
+  confidence: number;
+  factors?: CreditFactor[];
 }
 
-export interface CreditRecord {
-  amount: number;
-  recordType: string;
-  scoreImpact: number;
-  timestamp: number;
-  isRepaid: boolean;
-  provider: string;
+export interface CreditHistoryEvent {
+  id: string;
+  event_type: string;
+  event_title: string;
+  event_description?: string;
+  amount?: number | null;
+  currency?: string;
+  score_before?: number;
+  score_after?: number;
+  score_change?: number;
+  transaction_id?: string;
+  event_date: string;
 }
 
-export interface CreditHistory {
-  address: string;
-  records: CreditRecord[];
+export interface CreditHistoryResult {
+  history: CreditHistoryEvent[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+    has_next: boolean;
+    has_prev: boolean;
+  };
 }
 
 /**
- * Get credit score for an address
+ * Get the current credit score. There is no dedicated "get" endpoint; the
+ * calculate-score endpoint returns the cached score when one is still valid,
+ * so calling it with force_recalculation=false doubles as a "get" call.
  */
-export const getCreditScore = async (address: string): Promise<CreditScore> => {
+export const getCreditScore = async (
+  walletAddress?: string,
+): Promise<CreditScoreResult> => {
   try {
-    const response = await httpClient.get(
-      `${API_CONFIG.ENDPOINTS.CREDIT.SCORE}/${address}`,
-    );
-
-    if (response.data.success) {
-      return response.data.data;
-    }
-
-    throw new Error("Failed to get credit score");
+    const response = await httpClient.post<{
+      success: boolean;
+      data: CreditScoreResult;
+    }>(API_CONFIG.ENDPOINTS.CREDIT.CALCULATE, {
+      walletAddress,
+      force_recalculation: false,
+    });
+    return response.data.data;
   } catch (error: any) {
     throw new Error(
-      error.response?.data?.message ||
-        "Failed to get credit score. Please try again.",
+      error.response?.data?.message || "Failed to fetch credit score.",
     );
   }
 };
 
 /**
- * Get credit history for an address
- */
-export const getCreditHistory = async (
-  address: string,
-): Promise<CreditHistory> => {
-  try {
-    const response = await httpClient.get(
-      `${API_CONFIG.ENDPOINTS.CREDIT.HISTORY}/${address}`,
-    );
-
-    if (response.data.success) {
-      return response.data.data;
-    }
-
-    throw new Error("Failed to get credit history");
-  } catch (error: any) {
-    throw new Error(
-      error.response?.data?.message ||
-        "Failed to get credit history. Please try again.",
-    );
-  }
-};
-
-/**
- * Calculate credit score using AI
+ * Force a fresh credit score calculation.
  */
 export const calculateCreditScore = async (
-  walletAddress: string,
-): Promise<any> => {
+  walletAddress?: string,
+): Promise<CreditScoreResult> => {
   try {
-    const response = await httpClient.post(
-      API_CONFIG.ENDPOINTS.CREDIT.CALCULATE,
-      { walletAddress },
-    );
-
-    if (response.data.success) {
-      return response.data.data;
-    }
-
-    throw new Error("Failed to calculate credit score");
+    const response = await httpClient.post<{
+      success: boolean;
+      data: CreditScoreResult;
+    }>(API_CONFIG.ENDPOINTS.CREDIT.CALCULATE, {
+      walletAddress,
+      force_recalculation: true,
+    });
+    return response.data.data;
   } catch (error: any) {
     throw new Error(
-      error.response?.data?.message ||
-        "Failed to calculate credit score. Please try again.",
+      error.response?.data?.message || "Failed to calculate credit score.",
     );
   }
 };
 
 /**
- * Get score factors analysis
+ * Get the current user's credit history (paginated, scoped by JWT identity).
  */
-export const getScoreFactors = async (address: string): Promise<any[]> => {
+export const getCreditHistory = async (
+  page = 1,
+  perPage = 20,
+): Promise<CreditHistoryResult> => {
   try {
-    // This would ideally be a separate endpoint, but for now we can derive it from history
-    const history = await getCreditHistory(address);
-
-    // Analyze history to create score factors
-    const factors = [
-      {
-        name: "Payment History",
-        impact: "High",
-        status: calculatePaymentStatus(history.records),
-        icon: "check-circle",
-        color: "#50E3C2",
-      },
-      {
-        name: "Credit Utilization",
-        impact: "High",
-        status: "Good",
-        icon: "trending-up",
-        color: "#50E3C2",
-      },
-      {
-        name: "Length of Credit History",
-        impact: "Medium",
-        status: calculateHistoryLength(history.records),
-        icon: "history",
-        color: "#50E3C2",
-      },
-      {
-        name: "Credit Mix",
-        impact: "Low",
-        status: "Fair",
-        icon: "mix",
-        color: "#F5A623",
-      },
-      {
-        name: "New Credit",
-        impact: "Low",
-        status: "Good",
-        icon: "fiber-new",
-        color: "#50E3C2",
-      },
-    ];
-
-    return factors;
-  } catch (error) {
-    console.error("Error getting score factors:", error);
-    return [];
+    const response = await httpClient.get<{
+      success: boolean;
+      data: CreditHistoryResult;
+    }>(API_CONFIG.ENDPOINTS.CREDIT.HISTORY, {
+      params: { page, per_page: perPage },
+    });
+    return response.data.data;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.message || "Failed to fetch credit history.",
+    );
   }
 };
 
 /**
- * Helper: Calculate payment history status
+ * Extract a display-friendly list of score factors from a calculation
+ * result. Prefers the detailed `factors` array (only present on a fresh
+ * calculation); falls back to the always-present `score_breakdown` so the UI
+ * has something to show even when the score was served from cache.
  */
-const calculatePaymentStatus = (records: CreditRecord[]): string => {
-  if (records.length === 0) return "No Data";
+export const getScoreFactors = (
+  result: CreditScoreResult | null,
+): { name: string; value: number; description?: string }[] => {
+  if (!result) {
+    return [];
+  }
 
-  const repaidCount = records.filter((r) => r.isRepaid).length;
-  const repaidPercentage = (repaidCount / records.length) * 100;
+  if (result.factors?.length) {
+    return result.factors.map((factor) => ({
+      name: factor.factor_name,
+      value: Math.round(factor.contribution),
+      description: factor.factor_description,
+    }));
+  }
 
-  if (repaidPercentage >= 90) return "Excellent";
-  if (repaidPercentage >= 75) return "Good";
-  if (repaidPercentage >= 50) return "Fair";
-  return "Needs Improvement";
-};
+  const breakdown = result.score_breakdown || {};
+  const labels: Record<string, string> = {
+    payment_history: "Payment History",
+    credit_utilization: "Credit Utilization",
+    length_of_history: "Length of History",
+    credit_mix: "Credit Mix",
+    new_credit: "New Credit",
+    income_stability: "Income Stability",
+    debt_to_income: "Debt to Income",
+    blockchain_activity: "Blockchain Activity",
+  };
 
-/**
- * Helper: Calculate credit history length status
- */
-const calculateHistoryLength = (records: CreditRecord[]): string => {
-  if (records.length === 0) return "No Data";
-
-  const now = Date.now() / 1000;
-  const oldestRecord = Math.min(...records.map((r) => r.timestamp));
-  const ageInYears = (now - oldestRecord) / (365 * 24 * 60 * 60);
-
-  if (ageInYears >= 5) return "Excellent";
-  if (ageInYears >= 3) return "Good";
-  if (ageInYears >= 1) return "Fair";
-  return "Building";
+  return Object.entries(labels)
+    .filter(([key]) => breakdown[key as keyof ScoreBreakdown] !== undefined)
+    .map(([key, name]) => ({
+      name,
+      value: Math.round(breakdown[key as keyof ScoreBreakdown] as number),
+    }));
 };

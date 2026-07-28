@@ -1,170 +1,131 @@
 /**
  * Loan Service
- * Handles loan operations and calculations
+ * Calculates loan terms and manages loan applications against the real
+ * backend (code/backend/app.py: /api/loans/calculate, /api/loans/apply,
+ * /api/loans/applications). The backend does not expose loan-by-id,
+ * borrower-address lookups, approval, or repayment endpoints; only
+ * calculation, application submission, and listing your own applications
+ * are supported.
  */
 
 import { API_CONFIG } from "../config/api.config";
 import httpClient from "./http.client";
 
-export interface Loan {
-  loanId: number;
-  borrower: string;
+export type LoanType =
+  "personal" | "business" | "mortgage" | "auto" | "student" | "crypto_backed";
+
+export interface LoanCalculationResult {
+  loan_amount: number;
+  interest_rate: number;
+  term_months: number;
+  monthly_payment: number;
+  total_payment: number;
+  total_interest: number;
+  approval_probability: number;
+  credit_score: number;
+}
+
+export interface LoanApplicationRequest {
+  loanType: LoanType;
   amount: number;
-  interestRate: number;
-  durationDays: number;
-  startTime: number;
-  isApproved: boolean;
-  isRepaid: boolean;
+  termMonths: number;
+  rate?: number;
+  purpose?: string;
 }
 
-export interface LoanCalculation {
-  loanAmount: number;
-  interestRate: number;
-  loanTerm: number; // in months
-  monthlyPayment: number;
-  totalPayment: number;
-  totalInterest: number;
+export interface LoanApplication {
+  id: string;
+  application_number: string;
+  loan_type: string;
+  status: string;
+  requested_amount: string;
+  requested_term_months: number;
+  requested_rate?: string;
+  purpose?: string;
+  created_at: string;
 }
 
-/**
- * Get loan details by ID
- */
-export const getLoanById = async (loanId: number): Promise<Loan> => {
-  try {
-    const response = await httpClient.get(
-      `${API_CONFIG.ENDPOINTS.LOANS.GET_BY_ID}/${loanId}`,
-    );
-
-    if (response.data.success) {
-      return response.data.data;
-    }
-
-    throw new Error("Failed to get loan details");
-  } catch (error: any) {
-    throw new Error(
-      error.response?.data?.message ||
-        "Failed to get loan details. Please try again.",
-    );
-  }
-};
-
-/**
- * Get all loans for a borrower
- */
-export const getLoansByBorrower = async (address: string): Promise<Loan[]> => {
-  try {
-    const response = await httpClient.get(
-      `${API_CONFIG.ENDPOINTS.LOANS.GET_BY_BORROWER}/${address}`,
-    );
-
-    if (response.data.success) {
-      return response.data.data.loans || [];
-    }
-
-    throw new Error("Failed to get borrower loans");
-  } catch (error: any) {
-    // If no loans found, return empty array instead of error
-    if (error.response?.status === 404) {
-      return [];
-    }
-    throw new Error(
-      error.response?.data?.message ||
-        "Failed to get borrower loans. Please try again.",
-    );
-  }
-};
-
-/**
- * Create a new loan
- */
-export const createLoan = async (
-  amount: number,
-  interestRate: number,
-  durationDays: number,
-  privateKey: string,
-): Promise<any> => {
-  try {
-    const response = await httpClient.post(API_CONFIG.ENDPOINTS.LOANS.CREATE, {
-      amount,
-      interestRate,
-      durationDays,
-      privateKey,
-    });
-
-    if (response.data.success) {
-      return response.data.data;
-    }
-
-    throw new Error("Failed to create loan");
-  } catch (error: any) {
-    throw new Error(
-      error.response?.data?.message ||
-        "Failed to create loan. Please try again.",
-    );
-  }
-};
-
-/**
- * Calculate loan payment details
- */
-export const calculateLoan = (
-  loanAmount: number,
-  interestRate: number,
-  loanTerm: number,
-): LoanCalculation => {
-  const principal = loanAmount;
-  const monthlyRate = interestRate / 100 / 12;
-  const numberOfPayments = loanTerm;
-
-  if (principal <= 0 || monthlyRate <= 0 || numberOfPayments <= 0) {
-    return {
-      loanAmount,
-      interestRate,
-      loanTerm,
-      monthlyPayment: 0,
-      totalPayment: 0,
-      totalInterest: 0,
-    };
-  }
-
-  const monthlyPayment =
-    (principal * monthlyRate * (1 + monthlyRate) ** numberOfPayments) /
-    ((1 + monthlyRate) ** numberOfPayments - 1);
-
-  const totalPayment = monthlyPayment * numberOfPayments;
-  const totalInterest = totalPayment - principal;
-
-  return {
-    loanAmount,
-    interestRate,
-    loanTerm,
-    monthlyPayment: Number.isNaN(monthlyPayment) ? 0 : monthlyPayment,
-    totalPayment: Number.isNaN(totalPayment) ? 0 : totalPayment,
-    totalInterest: Number.isNaN(totalInterest) ? 0 : totalInterest,
+export interface LoanApplicationsResult {
+  applications: LoanApplication[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+    has_next: boolean;
+    has_prev: boolean;
   };
+}
+
+/**
+ * Calculate estimated loan terms and approval probability against the
+ * caller's current credit score.
+ */
+export const calculateLoan = async (
+  amount: number,
+  rate: number,
+  termMonths: number,
+): Promise<LoanCalculationResult> => {
+  try {
+    const response = await httpClient.post<{
+      success: boolean;
+      data: LoanCalculationResult;
+    }>(API_CONFIG.ENDPOINTS.LOANS.CALCULATE, {
+      amount,
+      rate,
+      term_months: termMonths,
+    });
+    return response.data.data;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.message || "Failed to calculate loan terms.",
+    );
+  }
 };
 
 /**
- * Format number with commas
+ * Submit a loan application.
  */
-export const formatNumber = (num: number): string => {
-  return num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+export const applyForLoan = async (
+  request: LoanApplicationRequest,
+): Promise<LoanApplication> => {
+  try {
+    const response = await httpClient.post<{
+      success: boolean;
+      data: LoanApplication;
+    }>(API_CONFIG.ENDPOINTS.LOANS.APPLY, {
+      loan_type: request.loanType,
+      requested_amount: request.amount,
+      requested_term_months: request.termMonths,
+      requested_rate: request.rate,
+      purpose: request.purpose,
+    });
+    return response.data.data;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.message || "Failed to submit loan application.",
+    );
+  }
 };
 
 /**
- * Get loan status text
+ * List the current user's submitted loan applications.
  */
-export const getLoanStatus = (loan: Loan): string => {
-  if (loan.isRepaid) return "Repaid";
-  if (!loan.isApproved) return "Pending";
-  return "Active";
-};
-
-/**
- * Get loan status color
- */
-export const getLoanStatusColor = (loan: Loan): string => {
-  if (loan.isRepaid) return "#50E3C2"; // success
-  if (!loan.isApproved) return "#F5A623"; // warning
-  return "#4A90E2"; // info
+export const getMyLoanApplications = async (
+  page = 1,
+  perPage = 20,
+): Promise<LoanApplicationsResult> => {
+  try {
+    const response = await httpClient.get<{
+      success: boolean;
+      data: LoanApplicationsResult;
+    }>(API_CONFIG.ENDPOINTS.LOANS.APPLICATIONS, {
+      params: { page, per_page: perPage },
+    });
+    return response.data.data;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.message || "Failed to fetch loan applications.",
+    );
+  }
 };

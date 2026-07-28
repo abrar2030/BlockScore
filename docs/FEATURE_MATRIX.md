@@ -70,12 +70,12 @@ Complete feature list with implementation details and examples.
 
 | Feature               | Short description     | Module / File                      | CLI flag / API                     | Example (path)                     | Notes             |
 | --------------------- | --------------------- | ---------------------------------- | ---------------------------------- | ---------------------------------- | ----------------- |
-| Setup Script          | Automated environment | `sctipts/setup_blockscore_env.sh`  | `./setup_blockscore_env.sh`        | [INSTALLATION.md](INSTALLATION.md) | Creates venvs     |
-| Run Script            | Start all services    | `sctipts/run_blockscore.sh`        | `./run_blockscore.sh`              | [QUICKSTART.md](QUICKSTART.md)     | One command start |
-| Lint Script           | Code quality check    | `sctipts/lint-all.sh`              | `./lint-all.sh`                    | [CONTRIBUTING.md](CONTRIBUTING.md) | ESLint + Prettier |
-| Component Restart     | Restart services      | `sctipts/component_restart.sh`     | `./component_restart.sh [service]` | [CLI.md#restart](CLI.md)           | Zero-downtime     |
-| Smart Contract Deploy | Deploy contracts      | `sctipts/smart_contract_deploy.sh` | `./smart_contract_deploy.sh`       | [CLI.md#deploy](CLI.md)            | Network selection |
-| Code Quality Check    | Automated QA          | `sctipts/code_quality_check.sh`    | `./code_quality_check.sh`          | [CONTRIBUTING.md](CONTRIBUTING.md) | Pre-commit hooks  |
+| Setup Script          | Automated environment | `scripts/setup_blockscore_env.sh`  | `./setup_blockscore_env.sh`        | [INSTALLATION.md](INSTALLATION.md) | Creates venvs     |
+| Run Script            | Start all services    | `scripts/run_blockscore.sh`        | `./run_blockscore.sh`              | [QUICKSTART.md](QUICKSTART.md)     | One command start |
+| Lint Script           | Code quality check    | `scripts/lint-all.sh`              | `./lint-all.sh`                    | [CONTRIBUTING.md](CONTRIBUTING.md) | ESLint + Prettier |
+| Component Restart     | Restart services      | `scripts/component_restart.sh`     | `./component_restart.sh [service]` | [CLI.md#restart](CLI.md)           | Zero-downtime     |
+| Smart Contract Deploy | Deploy contracts      | `scripts/smart_contract_deploy.sh` | `./smart_contract_deploy.sh`       | [CLI.md#deploy](CLI.md)            | Network selection |
+| Code Quality Check    | Automated QA          | `scripts/code_quality_check.sh`    | `./code_quality_check.sh`          | [CONTRIBUTING.md](CONTRIBUTING.md) | Pre-commit hooks  |
 
 ## API Endpoints Summary
 

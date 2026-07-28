@@ -1,48 +1,45 @@
 /**
  * Auth Slice
- * Redux slice for authentication state management
+ * Redux slice for authentication state management, backed by the real
+ * Flask backend's email/password auth and profile endpoints.
  */
 
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import * as authService from "../../services/auth.service";
-import {
-  getToken,
-  getUser,
-  getWalletAddress,
-} from "../../services/storage.service";
+import type { BackendUser } from "../../services/auth.service";
+import { getToken, getUser, saveUser } from "../../services/storage.service";
 
 export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
+  isInitializing: boolean;
   error: string | null;
-  user: {
-    username: string;
-    role: string;
-    walletAddress?: string;
-  } | null;
+  user: BackendUser | null;
   token: string | null;
 }
 
 const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
+  isInitializing: true,
   error: null,
   user: null,
   token: null,
 };
 
 /**
- * Async thunk for login
+ * Sign in with email and password.
  */
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (
-    credentials: { username: string; password: string },
+    credentials: { email: string; password: string; rememberMe?: boolean },
     { rejectWithValue },
   ) => {
     try {
       const response = await authService.login(credentials);
-      return response.data;
+      const token = response.access_token || response.tokens?.access_token;
+      return { user: response.user, token };
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -50,17 +47,30 @@ export const loginUser = createAsyncThunk(
 );
 
 /**
- * Async thunk for registration
+ * Register a new account, then sign in to establish a session (matches the
+ * backend's behavior: registration alone does not issue tokens).
  */
 export const registerUser = createAsyncThunk(
   "auth/register",
   async (
-    userData: { username: string; password: string },
+    userData: {
+      email: string;
+      password: string;
+      confirmPassword: string;
+      firstName?: string;
+      lastName?: string;
+    },
     { rejectWithValue },
   ) => {
     try {
-      const response = await authService.register(userData);
-      return response.data;
+      await authService.register(userData);
+      const loginResponse = await authService.login({
+        email: userData.email,
+        password: userData.password,
+      });
+      const token =
+        loginResponse.access_token || loginResponse.tokens?.access_token;
+      return { user: loginResponse.user, token };
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -68,53 +78,58 @@ export const registerUser = createAsyncThunk(
 );
 
 /**
- * Async thunk for logout
+ * Sign out.
  */
 export const logoutUser = createAsyncThunk("auth/logout", async () => {
   await authService.logout();
 });
 
 /**
- * Async thunk for checking stored auth
+ * Restore a session from a persisted token on app start.
  */
 export const checkStoredAuth = createAsyncThunk(
   "auth/checkStored",
   async () => {
-    const [user, token, walletAddress] = await Promise.all([
-      getUser(),
-      getToken(),
-      getWalletAddress(),
-    ]);
+    const [cachedUser, token] = await Promise.all([getUser(), getToken()]);
 
-    if (user && token) {
-      return {
-        user: { ...user, walletAddress: walletAddress || undefined },
-        token,
-      };
+    if (!token) {
+      return null;
     }
 
-    return null;
+    try {
+      const freshUser = await authService.getProfile();
+      await saveUser(freshUser);
+      return { user: freshUser, token };
+    } catch {
+      // Offline or the token expired server-side: fall back to the cached
+      // user so the app remains usable, and let the next API call surface
+      // any real auth failure.
+      if (cachedUser) {
+        return { user: cachedUser, token };
+      }
+      return null;
+    }
   },
 );
 
 /**
- * Async thunk for updating wallet address
+ * Update the current user's profile (including wallet address).
  */
-export const updateWallet = createAsyncThunk(
-  "auth/updateWallet",
-  async (walletAddress: string, { rejectWithValue }) => {
+export const updateUserProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async (
+    payload: Parameters<typeof authService.updateProfile>[0],
+    { rejectWithValue },
+  ) => {
     try {
-      await authService.updateWalletAddress(walletAddress);
-      return walletAddress;
+      const updated = await authService.updateProfile(payload);
+      return updated;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
   },
 );
 
-/**
- * Auth slice
- */
 const authSlice = createSlice({
   name: "auth",
   initialState,
@@ -133,7 +148,7 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.isAuthenticated = true;
       state.user = action.payload.user;
-      state.token = action.payload.token;
+      state.token = action.payload.token || null;
       state.error = null;
     });
     builder.addCase(loginUser.rejected, (state, action) => {
@@ -146,8 +161,11 @@ const authSlice = createSlice({
       state.isLoading = true;
       state.error = null;
     });
-    builder.addCase(registerUser.fulfilled, (state) => {
+    builder.addCase(registerUser.fulfilled, (state, action) => {
       state.isLoading = false;
+      state.isAuthenticated = true;
+      state.user = action.payload.user;
+      state.token = action.payload.token || null;
       state.error = null;
     });
     builder.addCase(registerUser.rejected, (state, action) => {
@@ -164,21 +182,26 @@ const authSlice = createSlice({
     });
 
     // Check stored auth
+    builder.addCase(checkStoredAuth.pending, (state) => {
+      state.isInitializing = true;
+    });
     builder.addCase(checkStoredAuth.fulfilled, (state, action) => {
+      state.isInitializing = false;
       if (action.payload) {
         state.isAuthenticated = true;
         state.user = action.payload.user;
         state.token = action.payload.token;
       }
     });
-
-    // Update wallet
-    builder.addCase(updateWallet.fulfilled, (state, action) => {
-      if (state.user) {
-        state.user.walletAddress = action.payload;
-      }
+    builder.addCase(checkStoredAuth.rejected, (state) => {
+      state.isInitializing = false;
     });
-    builder.addCase(updateWallet.rejected, (state, action) => {
+
+    // Update profile
+    builder.addCase(updateUserProfile.fulfilled, (state, action) => {
+      state.user = action.payload;
+    });
+    builder.addCase(updateUserProfile.rejected, (state, action) => {
       state.error = action.payload as string;
     });
   },

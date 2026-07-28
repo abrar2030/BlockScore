@@ -35,7 +35,7 @@ from flask_limiter.util import get_remote_address
 from models.audit import AuditEventType, AuditSeverity
 from models.credit import CreditHistory, CreditScore
 from models.loan import LoanApplication, LoanApplicationSchema, LoanStatus, LoanType
-from models.user import User, UserLoginSchema, UserRegistrationSchema
+from models.user import User, UserLoginSchema, UserProfileSchema, UserRegistrationSchema
 from services.audit_service import AuditService
 from services.auth_service import AuthService
 from services.blockchain_service import BlockchainService
@@ -858,6 +858,133 @@ def create_app(config_name: Any = "default") -> Flask:
                         "success": False,
                         "error": "Profile Retrieval Failed",
                         "message": "An error occurred while retrieving the profile.",
+                    }
+                ),
+                500,
+            )
+
+    @app.route("/api/profile", methods=["PUT"])
+    @jwt_required()
+    def update_profile() -> Tuple[Any, int]:
+        """Update the current user's profile endpoint"""
+        try:
+            user_id = get_jwt_identity()
+            user = db.session.get(User, user_id)
+            if not user:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "User Not Found",
+                            "message": "User profile not found.",
+                        }
+                    ),
+                    404,
+                )
+            schema = UserProfileSchema()
+            data = schema.load(request.json or {}, partial=True)
+
+            profile = user.profile
+            if not profile:
+                from models.user import UserProfile
+
+                profile = UserProfile(id=str(uuid.uuid4()), user_id=user.id)
+                db.session.add(profile)
+
+            for field, value in data.items():
+                setattr(profile, field, value)
+
+            db.session.commit()
+
+            audit_service.log_event(
+                event_type=AuditEventType.PROFILE_UPDATE,
+                event_description=f"Profile updated for user: {user_id}",
+                user_id=user_id,
+                resource_type="user_profile",
+                resource_id=profile.id,
+            )
+
+            profile_data = user.to_dict()
+            profile_data["profile"] = profile.to_dict()
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "message": "Profile updated successfully",
+                        "data": profile_data,
+                    }
+                ),
+                200,
+            )
+        except Exception as e:
+            from marshmallow import ValidationError as MarshmallowError
+
+            app.logger.error(f"Profile update error: {e}")
+            if isinstance(e, MarshmallowError):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Validation Error",
+                            "message": "Invalid profile data.",
+                            "errors": e.messages,
+                        }
+                    ),
+                    400,
+                )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Profile Update Failed",
+                        "message": "An error occurred while updating the profile.",
+                    }
+                ),
+                500,
+            )
+
+    @app.route("/api/loans/applications", methods=["GET"])
+    @jwt_required()
+    def get_loan_applications() -> Tuple[Any, int]:
+        """List the current user's loan applications endpoint"""
+        try:
+            user_id = get_jwt_identity()
+            page = request.args.get("page", 1, type=int)
+            per_page = min(request.args.get("per_page", 20, type=int), 100)
+            applications = (
+                LoanApplication.query.filter_by(user_id=user_id)
+                .order_by(LoanApplication.created_at.desc())
+                .paginate(page=page, per_page=per_page, error_out=False)
+            )
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "data": {
+                            "applications": [
+                                app_item.to_dict() for app_item in applications.items
+                            ],
+                            "pagination": {
+                                "page": page,
+                                "per_page": per_page,
+                                "total": applications.total,
+                                "pages": applications.pages,
+                                "has_next": applications.has_next,
+                                "has_prev": applications.has_prev,
+                            },
+                        },
+                    }
+                ),
+                200,
+            )
+        except Exception as e:
+            app.logger.error(f"Loan applications retrieval error: {e}")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Retrieval Failed",
+                        "message": "An error occurred while retrieving loan applications.",
                     }
                 ),
                 500,

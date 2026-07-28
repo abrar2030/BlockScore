@@ -21,7 +21,7 @@ git clone https://github.com/quantsingularity/BlockScore.git
 cd BlockScore
 
 # Run automated setup script
-./sctipts/setup_blockscore_env.sh
+./scripts/setup_blockscore_env.sh
 ```
 
 This script will:
@@ -60,7 +60,7 @@ CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
 
 ```bash
 # Option A: Use the run script (recommended)
-./sctipts/run_blockscore.sh
+./scripts/run_blockscore.sh
 
 # Option B: Start services manually
 # Terminal 1 - Backend API

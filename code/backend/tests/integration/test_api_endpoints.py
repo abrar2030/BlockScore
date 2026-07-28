@@ -202,6 +202,122 @@ class TestLoanEndpoints:
         assert response.status_code in (201, 400, 500)
 
 
+class TestProfileUpdateEndpoint:
+    """Integration tests for the profile update endpoint"""
+
+    def test_update_profile_requires_auth(self, client: Any) -> Any:
+        """Test that updating the profile requires auth"""
+        response = client.put(
+            "/api/profile",
+            json={"first_name": "Ada"},
+            content_type="application/json",
+        )
+        assert response.status_code in (401, 422)
+
+    def test_update_profile_success(
+        self, client: Any, db: Any, sample_user: Any
+    ) -> Any:
+        """Test updating profile fields with a valid JWT persists them"""
+        login_resp = client.post(
+            "/api/auth/login",
+            json={"email": sample_user.email, "password": "TestPassword123!"},
+            content_type="application/json",
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Login failed, skipping downstream test")
+
+        token = login_resp.get_json()["tokens"]["access_token"]
+        response = client.put(
+            "/api/profile",
+            json={
+                "first_name": "Ada",
+                "last_name": "Lovelace",
+                "phone_number": "+15551234567",
+                "wallet_address": "0x1234567890123456789012345678901234567890",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["data"]["profile"]["first_name"] == "Ada"
+        assert data["data"]["profile"]["last_name"] == "Lovelace"
+        assert (
+            data["data"]["profile"]["wallet_address"]
+            == "0x1234567890123456789012345678901234567890"
+        )
+
+    def test_update_profile_partial(
+        self, client: Any, db: Any, sample_user: Any
+    ) -> Any:
+        """Test that updating a subset of fields does not require all fields"""
+        login_resp = client.post(
+            "/api/auth/login",
+            json={"email": sample_user.email, "password": "TestPassword123!"},
+            content_type="application/json",
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Login failed, skipping downstream test")
+
+        token = login_resp.get_json()["tokens"]["access_token"]
+        response = client.put(
+            "/api/profile",
+            json={"city": "Budapest"},
+            headers={"Authorization": f"Bearer {token}"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["data"]["profile"]["address"]["city"] == "Budapest"
+
+
+class TestLoanApplicationsListEndpoint:
+    """Integration tests for listing the current user's loan applications"""
+
+    def test_list_applications_requires_auth(self, client: Any) -> Any:
+        """Test that listing loan applications requires auth"""
+        response = client.get("/api/loans/applications")
+        assert response.status_code in (401, 422)
+
+    def test_list_applications_returns_submitted_application(
+        self, client: Any, db: Any, sample_user: Any
+    ) -> Any:
+        """Test that a submitted application shows up in the list"""
+        login_resp = client.post(
+            "/api/auth/login",
+            json={"email": sample_user.email, "password": "TestPassword123!"},
+            content_type="application/json",
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Login failed, skipping downstream test")
+
+        token = login_resp.get_json()["tokens"]["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        apply_resp = client.post(
+            "/api/loans/apply",
+            json={
+                "loan_type": "personal",
+                "requested_amount": "5000.00",
+                "requested_term_months": 24,
+            },
+            headers=headers,
+            content_type="application/json",
+        )
+        if apply_resp.status_code != 201:
+            pytest.skip("Loan application failed, skipping downstream test")
+
+        response = client.get("/api/loans/applications", headers=headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert "applications" in data["data"]
+        assert "pagination" in data["data"]
+        assert len(data["data"]["applications"]) >= 1
+        assert data["data"]["applications"][0]["loan_type"] == "personal"
+
+
 class TestHealthEndpoints:
     """Integration tests for health check endpoints"""
 

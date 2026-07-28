@@ -1,14 +1,23 @@
-import { useNavigation } from "@react-navigation/native"; // Import useNavigation
+/**
+ * Credit History Screen
+ * Displays the current user's real credit history and score trend, backed by
+ * GET /api/credit/history via the credit Redux slice.
+ */
+
+import { useNavigation } from "@react-navigation/native";
 import { Icon } from "@rneui/themed";
+import { useEffect, useState } from "react";
 import {
-  Alert,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from "react-native"; // Import Alert
+} from "react-native";
 import { LineChart } from "react-native-chart-kit";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { fetchCreditHistory } from "../store/slices/creditSlice";
 import {
   responsiveFontSize,
   responsiveHeight,
@@ -31,83 +40,75 @@ const colors = {
   error: "#D0021B", // Red for negative changes
 };
 
-const CreditHistoryScreen = () => {
-  const navigation = useNavigation(); // Get navigation object
+const chartConfig = {
+  backgroundGradientFrom: colors.cardBackground,
+  backgroundGradientTo: colors.cardBackground,
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+  style: {
+    borderRadius: 15,
+  },
+  propsForDots: {
+    r: "5",
+    strokeWidth: "2",
+    stroke: colors.primary,
+  },
+  propsForBackgroundLines: {
+    strokeDasharray: "",
+    stroke: colors.border,
+  },
+};
 
-  // Sample data for the chart
-  const data = {
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+const formatDate = (value) => {
+  if (!value) {
+    return { month: "-", day: "-" };
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return { month: "-", day: "-" };
+  }
+  return {
+    month: date.toLocaleDateString(undefined, { month: "short" }).toUpperCase(),
+    day: String(date.getDate()),
+  };
+};
+
+const CreditHistoryScreen = () => {
+  const navigation = useNavigation();
+  const dispatch = useAppDispatch();
+  const { history, isLoading } = useAppSelector((state) => state.credit);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    dispatch(fetchCreditHistory({ page, perPage: 10 }));
+  }, [dispatch, page]);
+
+  const events = history?.history || [];
+  const pagination = history?.pagination;
+
+  // Build the score trend chart from real events that recorded a score,
+  // oldest first. Falls back to a single flat point when there is no
+  // score-affecting history yet.
+  const scoredEvents = events
+    .filter((event) => typeof event.score_after === "number")
+    .slice()
+    .reverse();
+
+  const chartData = {
+    labels: scoredEvents.length
+      ? scoredEvents.map((event) => formatDate(event.event_date).month)
+      : ["-"],
     datasets: [
       {
-        data: [680, 700, 710, 695, 730, 750],
-        color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`, // Use primary color
+        data: scoredEvents.length
+          ? scoredEvents.map((event) => event.score_after)
+          : [0],
+        color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
         strokeWidth: 3,
       },
     ],
     legend: ["Credit Score Trend"],
-  };
-
-  const chartConfig = {
-    backgroundGradientFrom: colors.cardBackground,
-    backgroundGradientTo: colors.cardBackground,
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`, // Primary color for lines/labels
-    labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`, // textPrimary for labels
-    style: {
-      borderRadius: 15,
-    },
-    propsForDots: {
-      r: "5",
-      strokeWidth: "2",
-      stroke: colors.primary,
-    },
-    propsForBackgroundLines: {
-      strokeDasharray: "", // Solid lines
-      stroke: colors.border, // Use border color for grid lines
-    },
-  };
-
-  // Sample history data
-  const historyData = [
-    {
-      date: "APR 15",
-      title: "Loan Payment",
-      description: "On-time payment recorded",
-      scoreChange: 5,
-    },
-    {
-      date: "MAR 22",
-      title: "Credit Inquiry",
-      description: "Mortgage pre-approval",
-      scoreChange: -2,
-    },
-    {
-      date: "MAR 10",
-      title: "Credit Card Payment",
-      description: "Paid in full",
-      scoreChange: 3,
-    },
-    {
-      date: "FEB 28",
-      title: "Loan Payment",
-      description: "On-time payment recorded",
-      scoreChange: 5,
-    },
-    {
-      date: "JAN 15",
-      title: "New Credit Card",
-      description: "Account opened",
-      scoreChange: -1,
-    },
-  ];
-
-  // Placeholder action for View Full History button
-  const handleViewFullHistory = () => {
-    Alert.alert(
-      "View Full History",
-      "This feature is not yet implemented. Accessing full history requires backend integration.",
-      [{ text: "OK" }],
-    );
   };
 
   return (
@@ -126,69 +127,108 @@ const CreditHistoryScreen = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Credit History</Text>
         <View style={styles.headerPlaceholder} />
-        {/* To balance the back button */}
       </View>
 
-      <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Score Trend</Text>
-        <LineChart
-          data={data}
-          width={responsiveWidth(90)} // Adjust width slightly for padding
-          height={responsiveHeight(30)}
-          chartConfig={chartConfig}
-          bezier // Smooth curve
-          style={styles.chart}
-        />
-      </View>
+      {scoredEvents.length > 0 && (
+        <View style={styles.chartContainer}>
+          <Text style={styles.sectionTitle}>Score Trend</Text>
+          <LineChart
+            data={chartData}
+            width={responsiveWidth(90)}
+            height={responsiveHeight(30)}
+            chartConfig={chartConfig}
+            bezier
+            style={styles.chart}
+          />
+        </View>
+      )}
 
       <View style={styles.historyContainer}>
         <Text style={styles.sectionTitle}>Recent Activities</Text>
 
-        {historyData.map((item, index) => (
-          <View
-            key={index}
-            style={[
-              styles.historyItem,
-              index === historyData.length - 1 ? styles.historyItemLast : null,
-            ]}
-          >
-            <View style={styles.historyDate}>
-              <Text style={styles.dateText}>{item.date.split(" ")[0]}</Text>
-              <Text style={styles.dateNumber}>{item.date.split(" ")[1]}</Text>
-            </View>
-            <View style={styles.historyContent}>
-              <Text style={styles.historyTitle}>{item.title}</Text>
-              <Text style={styles.historyDescription}>{item.description}</Text>
-            </View>
-            <View style={styles.historyScore}>
-              <Text
+        {isLoading ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={{ marginVertical: responsiveHeight(3) }}
+          />
+        ) : events.length === 0 ? (
+          <Text style={styles.emptyText}>No credit events recorded yet.</Text>
+        ) : (
+          events.map((item, index) => {
+            const { month, day } = formatDate(
+              item.event_date || item.created_at,
+            );
+            return (
+              <View
+                key={item.id || index}
                 style={[
-                  styles.scoreChange,
-                  item.scoreChange < 0 ? styles.negative : styles.positive,
+                  styles.historyItem,
+                  index === events.length - 1 ? styles.historyItemLast : null,
                 ]}
               >
-                {item.scoreChange > 0
-                  ? `+${item.scoreChange}`
-                  : item.scoreChange}
-              </Text>
-            </View>
-          </View>
-        ))}
+                <View style={styles.historyDate}>
+                  <Text style={styles.dateText}>{month}</Text>
+                  <Text style={styles.dateNumber}>{day}</Text>
+                </View>
+                <View style={styles.historyContent}>
+                  <Text style={styles.historyTitle}>
+                    {item.event_title || item.event_type}
+                  </Text>
+                  <Text style={styles.historyDescription}>
+                    {item.event_description || ""}
+                  </Text>
+                </View>
+                <View style={styles.historyScore}>
+                  {typeof item.score_change === "number" &&
+                  item.score_change !== 0 ? (
+                    <Text
+                      style={[
+                        styles.scoreChange,
+                        item.score_change < 0
+                          ? styles.negative
+                          : styles.positive,
+                      ]}
+                    >
+                      {item.score_change > 0
+                        ? `+${item.score_change}`
+                        : item.score_change}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })
+        )}
       </View>
 
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={handleViewFullHistory}
-      >
-        <Icon
-          name="description"
-          type="material"
-          color={colors.cardBackground}
-          size={responsiveFontSize(2.5)}
-          style={styles.buttonIcon}
-        />
-        <Text style={styles.actionButtonText}>View Full History</Text>
-      </TouchableOpacity>
+      {pagination && (pagination.has_prev || pagination.has_next) && (
+        <View style={styles.paginationRow}>
+          <TouchableOpacity
+            style={[
+              styles.pageButton,
+              !pagination.has_prev && styles.pageButtonDisabled,
+            ]}
+            onPress={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={!pagination.has_prev}
+          >
+            <Text style={styles.pageButtonText}>Previous</Text>
+          </TouchableOpacity>
+          <Text style={styles.pageIndicator}>
+            Page {pagination.page} of {pagination.pages}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.pageButton,
+              !pagination.has_next && styles.pageButtonDisabled,
+            ]}
+            onPress={() => setPage((p) => p + 1)}
+            disabled={!pagination.has_next}
+          >
+            <Text style={styles.pageButtonText}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 };
@@ -339,6 +379,37 @@ const styles = StyleSheet.create({
     color: colors.cardBackground,
     fontSize: responsiveFontSize(2.2),
     fontWeight: "bold",
+  },
+  emptyText: {
+    fontSize: responsiveFontSize(1.8),
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginVertical: responsiveHeight(3),
+  },
+  paginationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: responsiveWidth(5),
+    marginBottom: responsiveHeight(4),
+  },
+  pageButton: {
+    paddingVertical: responsiveHeight(1),
+    paddingHorizontal: responsiveWidth(4),
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  pageButtonDisabled: {
+    backgroundColor: colors.border,
+  },
+  pageButtonText: {
+    color: colors.cardBackground,
+    fontWeight: "600",
+    fontSize: responsiveFontSize(1.7),
+  },
+  pageIndicator: {
+    color: colors.textSecondary,
+    fontSize: responsiveFontSize(1.6),
   },
 });
 

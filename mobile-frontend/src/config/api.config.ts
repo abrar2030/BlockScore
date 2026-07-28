@@ -1,34 +1,41 @@
 /**
  * API Configuration
- * Central configuration for all API-related settings
+ * Central configuration for all API-related settings.
+ *
+ * Endpoint paths mirror the real Flask backend (code/backend/app.py). There
+ * is no separate wallet-auth endpoint, loan-by-id lookup, or loan approval /
+ * repayment endpoint on the backend; only the endpoints listed below exist.
  */
 
 export const API_CONFIG = {
-  BASE_URL: process.env.API_BASE_URL || "http://localhost:3000",
+  BASE_URL: process.env.API_BASE_URL || "http://localhost:5000",
   TIMEOUT: parseInt(process.env.API_TIMEOUT || "30000", 10),
   ENDPOINTS: {
     // Auth endpoints
     AUTH: {
       LOGIN: "/api/auth/login",
       REGISTER: "/api/auth/register",
-      WALLET: "/api/auth/wallet",
+      LOGOUT: "/api/auth/logout",
+      REFRESH: "/api/auth/refresh",
+    },
+    // Profile endpoints
+    PROFILE: {
+      GET: "/api/profile",
+      UPDATE: "/api/profile",
     },
     // Credit endpoints
     CREDIT: {
-      SCORE: "/api/credit/score",
-      HISTORY: "/api/credit/history",
       CALCULATE: "/api/credit/calculate-score",
+      HISTORY: "/api/credit/history",
     },
     // Loan endpoints
     LOANS: {
-      GET_BY_ID: "/api/loans",
-      GET_BY_BORROWER: "/api/loans/borrower",
-      CREATE: "/api/loans/create",
-      APPROVE: "/api/loans/approve",
-      REPAY: "/api/loans/repay",
+      CALCULATE: "/api/loans/calculate",
+      APPLY: "/api/loans/apply",
+      APPLICATIONS: "/api/loans/applications",
     },
     // Health check
-    HEALTH: "/health",
+    HEALTH: "/api/health",
   },
 };
 

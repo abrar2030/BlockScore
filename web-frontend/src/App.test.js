@@ -8,13 +8,20 @@ import { Web3Provider } from "./contexts/Web3Context";
 import theme from "./theme";
 
 // Mock contexts
+const mockAuth = {
+  user: { address: "0x123", name: "Test User", email: "test@blockscore.io" },
+  isAuthenticated: true,
+  loading: false,
+  signIn: jest.fn(),
+  signUp: jest.fn(),
+  signOut: jest.fn(),
+  login: jest.fn(),
+  logout: jest.fn(),
+};
+
 jest.mock("./contexts/AuthContext", () => ({
   AuthProvider: ({ children }) => <div>{children}</div>,
-  useAuth: () => ({
-    user: { address: "0x123", name: "Test User" },
-    isAuthenticated: true,
-    loading: false,
-  }),
+  useAuth: () => mockAuth,
 }));
 
 jest.mock("./contexts/Web3Context", () => ({
@@ -58,10 +65,10 @@ describe("App Component", () => {
   test("shows loading screen initially", () => {
     renderWithProviders(<App />);
     // Loading screen should appear briefly
-    expect(
-      screen.getByText(/Loading BlockScore/i) ||
-        screen.queryByRole("progressbar"),
-    ).toBeTruthy();
+    const hasLoadingText =
+      screen.queryAllByText(/Loading BlockScore/i).length > 0;
+    const hasSpinner = screen.queryAllByRole("progressbar").length > 0;
+    expect(hasLoadingText || hasSpinner).toBe(true);
   });
 
   test("renders landing page on root route", async () => {
@@ -75,13 +82,57 @@ describe("App Component", () => {
     );
   });
 
+  test("landing page shows Sign in and does not render the app sidebar", async () => {
+    renderWithProviders(<App />, { route: "/" });
+    await waitFor(
+      () => expect(screen.queryByRole("progressbar")).not.toBeInTheDocument(),
+      { timeout: 2000 },
+    );
+    // Authenticated mock -> navbar (and hero CTA) show "Go to Dashboard".
+    expect(screen.getAllByText(/Go to Dashboard/i).length).toBeGreaterThan(0);
+    // The app's dashboard sidebar items must not be present on the homepage.
+    expect(screen.queryByText(/Loan Calculator/i)).not.toBeInTheDocument();
+  });
+
+  test("renders the sign in page", async () => {
+    renderWithProviders(<App />, { route: "/signin" });
+    await waitFor(
+      () => expect(screen.queryByRole("progressbar")).not.toBeInTheDocument(),
+      { timeout: 2000 },
+    );
+    expect(screen.getByText(/Welcome back/i)).toBeInTheDocument();
+  });
+
+  test("renders the sign up page", async () => {
+    renderWithProviders(<App />, { route: "/signup" });
+    await waitFor(
+      () => expect(screen.queryByRole("progressbar")).not.toBeInTheDocument(),
+      { timeout: 2000 },
+    );
+    expect(screen.getByText(/Create your account/i)).toBeInTheDocument();
+  });
+
+  test("renders the dashboard sidebar for an authenticated user", async () => {
+    renderWithProviders(<App />, { route: "/dashboard" });
+    // The Dashboard renders permanent decorative gauges/meters that also use
+    // role="progressbar", so we wait for sidebar content directly. The
+    // Sidebar also renders both its mobile and desktop drawers into the DOM
+    // simultaneously (one hidden via CSS), so multiple matches are expected.
+    const matches = await screen.findAllByText(
+      /Loan Calculator/i,
+      {},
+      { timeout: 5000 },
+    );
+    expect(matches.length).toBeGreaterThan(0);
+  }, 10000);
+
   test("renders not found page for invalid route", async () => {
     renderWithProviders(<App />, { route: "/invalid-route" });
     await waitFor(
       () => {
-        expect(
-          screen.queryByText(/404/i) || screen.queryByText(/not found/i),
-        ).toBeTruthy();
+        const has404 = screen.queryAllByText(/404/i).length > 0;
+        const hasNotFound = screen.queryAllByText(/not found/i).length > 0;
+        expect(has404 || hasNotFound).toBe(true);
       },
       { timeout: 2000 },
     );

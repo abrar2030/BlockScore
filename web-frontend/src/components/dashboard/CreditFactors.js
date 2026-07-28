@@ -1,160 +1,134 @@
 import {
   Box,
-  Grid,
+  Card,
+  CardContent,
   LinearProgress,
-  Paper,
+  Tooltip,
   Typography,
-  useTheme,
 } from "@mui/material";
+import { motion } from "framer-motion";
 
-const CreditFactors = ({ features }) => {
-  const theme = useTheme();
+// Maps the backend's score_breakdown keys (each 0-100) to display labels and
+// short explanations, matching services/credit_service.py's
+// _calculate_*_score methods.
+const FACTOR_META = [
+  {
+    key: "payment_history",
+    label: "Payment History",
+    description: "On-time vs. late loan repayments",
+  },
+  {
+    key: "credit_utilization",
+    label: "Credit Utilization",
+    description: "How much of your available credit is in use",
+  },
+  {
+    key: "length_of_history",
+    label: "Length of History",
+    description: "How long you have had active credit accounts",
+  },
+  {
+    key: "credit_mix",
+    label: "Credit Mix",
+    description: "Diversity of your loan and credit types",
+  },
+  {
+    key: "new_credit",
+    label: "New Credit",
+    description: "Recent credit inquiries and new accounts",
+  },
+  {
+    key: "income_stability",
+    label: "Income Stability",
+    description: "Consistency of reported income over time",
+  },
+  {
+    key: "debt_to_income",
+    label: "Debt to Income",
+    description: "Your total debt relative to your income",
+  },
+  {
+    key: "blockchain_activity",
+    label: "Blockchain Activity",
+    description: "On-chain transaction history and wallet activity",
+  },
+];
 
-  // Default values if no features provided
-  const defaultFeatures = {
-    total_loans: 0,
-    total_amount: 0,
-    repaid_ratio: 0,
-    avg_loan_amount: 0,
-  };
+const getColor = (value) => {
+  if (value >= 75) return "success";
+  if (value >= 50) return "info";
+  if (value >= 25) return "warning";
+  return "error";
+};
 
-  const data = features || defaultFeatures;
+const CreditFactors = ({ scoreBreakdown }) => {
+  const factors = FACTOR_META.map((meta) => ({
+    ...meta,
+    value: scoreBreakdown?.[meta.key],
+  })).filter((factor) => factor.value !== undefined && factor.value !== null);
 
-  // Calculate normalized values for progress bars (0-100)
-  const normalizedRepaidRatio = data.repaid_ratio * 100;
-  const normalizedTotalLoans = Math.min((data.total_loans / 10) * 100, 100); // Assuming 10+ loans is max
-  const normalizedAvgAmount = Math.min(
-    (data.avg_loan_amount / 5000) * 100,
-    100,
-  ); // Assuming $5000+ is max
-
-  // Get color based on value
-  const getColorForValue = (value) => {
-    if (value >= 80) return theme.palette.success.main;
-    if (value >= 60) return theme.palette.primary.main;
-    if (value >= 40) return theme.palette.info.main;
-    if (value >= 20) return theme.palette.warning.main;
-    return theme.palette.error.main;
-  };
+  if (!factors.length) {
+    return (
+      <Card sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+            Score Factors
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Factor breakdown will appear here once your credit score has been
+            calculated.
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Box>
-      <Grid container spacing={2}>
-        {/* Repayment History */}
-        <Grid item xs={12}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              bgcolor: "background.default",
-              borderRadius: 2,
-            }}
-          >
-            <Typography variant="subtitle2" gutterBottom>
-              Repayment History
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Box sx={{ width: "100%", mr: 1 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={normalizedRepaidRatio}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: theme.palette.grey[200],
-                    "& .MuiLinearProgress-bar": {
-                      backgroundColor: getColorForValue(normalizedRepaidRatio),
-                    },
-                  }}
-                />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                {normalizedRepaidRatio.toFixed(0)}%
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {data.repaid_ratio < 0.6 ? "Needs improvement" : "Good standing"}
-            </Typography>
-          </Paper>
-        </Grid>
+    <Card sx={{ borderRadius: 3 }}>
+      <CardContent>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+          Score Factors
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Each factor is scored from 0 to 100 and contributes to your overall
+          credit score.
+        </Typography>
 
-        {/* Loan Count */}
-        <Grid item xs={12}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              bgcolor: "background.default",
-              borderRadius: 2,
-            }}
+        {factors.map((factor, index) => (
+          <motion.div
+            key={factor.key}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.05 }}
           >
-            <Typography variant="subtitle2" gutterBottom>
-              Loan Count
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Box sx={{ width: "100%", mr: 1 }}>
+            <Tooltip title={factor.description} arrow placement="top">
+              <Box sx={{ mb: 2.5 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    mb: 0.5,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {factor.label}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {Math.round(factor.value)}/100
+                  </Typography>
+                </Box>
                 <LinearProgress
                   variant="determinate"
-                  value={normalizedTotalLoans}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: theme.palette.grey[200],
-                    "& .MuiLinearProgress-bar": {
-                      backgroundColor: getColorForValue(normalizedTotalLoans),
-                    },
-                  }}
+                  value={Math.min(100, Math.max(0, factor.value))}
+                  color={getColor(factor.value)}
+                  sx={{ height: 8, borderRadius: 4 }}
                 />
               </Box>
-              <Typography variant="body2" color="text.secondary">
-                {data.total_loans}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {data.total_loans < 3 ? "Limited history" : "Established history"}
-            </Typography>
-          </Paper>
-        </Grid>
-
-        {/* Average Loan Amount */}
-        <Grid item xs={12}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              bgcolor: "background.default",
-              borderRadius: 2,
-            }}
-          >
-            <Typography variant="subtitle2" gutterBottom>
-              Average Loan Amount
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-              <Box sx={{ width: "100%", mr: 1 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={normalizedAvgAmount}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: theme.palette.grey[200],
-                    "& .MuiLinearProgress-bar": {
-                      backgroundColor: getColorForValue(normalizedAvgAmount),
-                    },
-                  }}
-                />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                ${data.avg_loan_amount.toFixed(0)}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {data.avg_loan_amount < 1000 ? "Small loans" : "Moderate loans"}
-            </Typography>
-          </Paper>
-        </Grid>
-      </Grid>
-    </Box>
+            </Tooltip>
+          </motion.div>
+        ))}
+      </CardContent>
+    </Card>
   );
 };
 

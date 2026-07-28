@@ -1,149 +1,284 @@
-// Icons
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ErrorIcon from "@mui/icons-material/Error";
-import HistoryIcon from "@mui/icons-material/History";
-import SecurityIcon from "@mui/icons-material/Security";
-import SettingsIcon from "@mui/icons-material/Settings";
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
 import {
+  Alert,
   Avatar,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
+  Container,
   Divider,
   Grid,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-  Paper,
+  MenuItem,
+  Snackbar,
+  TextField,
   Typography,
-  useTheme,
 } from "@mui/material";
+import EventIcon from "@mui/icons-material/Event";
+import PersonIcon from "@mui/icons-material/Person";
+import PhoneIcon from "@mui/icons-material/Phone";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { motion } from "framer-motion";
+import { useCallback, useEffect, useState } from "react";
+import CreditFactors from "../components/dashboard/CreditFactors";
+import CreditScoreGauge from "../components/dashboard/CreditScoreGauge";
 import { useAuth } from "../contexts/AuthContext";
-import { useWeb3 } from "../contexts/Web3Context";
+import { useCredit } from "../contexts/CreditContext";
+import {
+  fetchCurrentUser,
+  getLoanApplications,
+  updateProfile,
+} from "../utils/api";
+
+const EMPLOYMENT_STATUSES = [
+  "Employed",
+  "Self-Employed",
+  "Unemployed",
+  "Student",
+  "Retired",
+];
+
+const emptyForm = {
+  first_name: "",
+  last_name: "",
+  phone_number: "",
+  street_address: "",
+  city: "",
+  state: "",
+  postal_code: "",
+  country: "",
+  annual_income: "",
+  employment_status: "",
+  employer_name: "",
+  wallet_address: "",
+};
+
+const toFormValues = (profileData) => {
+  const profile = profileData?.profile;
+  if (!profile) return emptyForm;
+  return {
+    first_name: profile.first_name || "",
+    last_name: profile.last_name || "",
+    phone_number: profile.phone_number || "",
+    street_address: profile.address?.street_address || "",
+    city: profile.address?.city || "",
+    state: profile.address?.state || "",
+    postal_code: profile.address?.postal_code || "",
+    country: profile.address?.country || "",
+    annual_income: profile.annual_income ?? "",
+    employment_status: profile.employment_status || "",
+    employer_name: profile.employer_name || "",
+    wallet_address: profile.wallet_address || "",
+  };
+};
+
+const statusColor = {
+  approved: "success",
+  disbursed: "success",
+  under_review: "info",
+  submitted: "info",
+  rejected: "error",
+  cancelled: "default",
+  draft: "default",
+};
 
 const Profile = () => {
-  const theme = useTheme();
-  const { user, logout } = useAuth();
-  const { accounts, networkId } = useWeb3();
+  const { user: authUser, logout } = useAuth();
+  const { creditData, needsWallet } = useCredit();
 
-  const walletAddress =
-    accounts[0] ||
-    user?.address ||
-    "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
+  const [profileData, setProfileData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
-  // Format wallet address for display
-  const formatAddress = (address) => {
-    if (!address) return "";
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [applications, setApplications] = useState([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(true);
+
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await fetchCurrentUser();
+      setProfileData(data);
+      setForm(toFormValues(data));
+    } catch (err) {
+      setLoadError(
+        err?.response?.data?.message || "We could not load your profile.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadApplications = useCallback(async () => {
+    setApplicationsLoading(true);
+    try {
+      const data = await getLoanApplications(1, 5);
+      setApplications(data?.applications || []);
+    } catch (err) {
+      console.error("Error loading loan applications:", err);
+    } finally {
+      setApplicationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+    loadApplications();
+  }, [loadProfile, loadApplications]);
+
+  const handleChange = (field) => (event) => {
+    setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  // Get network name
-  const getNetworkName = (id) => {
-    switch (id) {
-      case 1:
-        return "Ethereum Mainnet";
-      case 3:
-        return "Ropsten Testnet";
-      case 4:
-        return "Rinkeby Testnet";
-      case 5:
-        return "Goerli Testnet";
-      case 42:
-        return "Kovan Testnet";
-      default:
-        return "Unknown Network";
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        ...form,
+        annual_income:
+          form.annual_income === "" ? null : Number(form.annual_income),
+        wallet_address: form.wallet_address || null,
+      };
+      const updated = await updateProfile(payload);
+      setProfileData(updated);
+      setForm(toFormValues(updated));
+      setIsEditing(false);
+      setSaveSuccess(true);
+    } catch (err) {
+      setSaveError(
+        err?.response?.data?.message ||
+          "We could not save your profile changes.",
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
-          Profile
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Manage your wallet and account settings.
-        </Typography>
-      </Box>
+  const handleCancel = () => {
+    setForm(toFormValues(profileData));
+    setIsEditing(false);
+    setSaveError(null);
+  };
 
-      <Grid container spacing={3}>
-        {/* Wallet Information */}
-        <Grid item xs={12} md={4}>
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Box
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "60vh",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  const profile = profileData?.profile;
+  const displayName = profile?.full_name?.trim() || authUser?.email || "";
+
+  return (
+    <Container maxWidth="lg" sx={{ py: 2 }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
+            Profile
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Manage your account details and view your credit summary.
+          </Typography>
+        </Box>
+
+        {loadError && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {loadError}
+          </Alert>
+        )}
+
+        <Grid container spacing={3}>
+          {/* Identity card */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ borderRadius: 3 }}>
+              <CardContent sx={{ textAlign: "center", p: 3 }}>
+                <Avatar
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    mb: 3,
+                    width: 72,
+                    height: 72,
+                    mx: "auto",
+                    mb: 2,
+                    bgcolor: "primary.main",
+                    fontSize: 28,
                   }}
                 >
-                  <Avatar
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      bgcolor: "primary.main",
-                      mb: 2,
-                    }}
-                  >
-                    <AccountBalanceWalletIcon sx={{ fontSize: 40 }} />
-                  </Avatar>
-
-                  <Typography variant="h6" align="center" gutterBottom>
-                    {user?.name || "Wallet User"}
-                  </Typography>
-
-                  <Chip
-                    label={formatAddress(walletAddress)}
-                    color="primary"
-                    variant="outlined"
-                    sx={{ fontFamily: '"Roboto Mono", monospace' }}
-                  />
-                </Box>
+                  {(displayName || "?").charAt(0).toUpperCase()}
+                </Avatar>
+                <Typography variant="h6" fontWeight={600}>
+                  {profile?.full_name || "Add your name"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {profileData?.email}
+                </Typography>
+                <Chip
+                  size="small"
+                  label={
+                    profile?.kyc_status?.replace(/_/g, " ") || "not started"
+                  }
+                  sx={{ textTransform: "capitalize", mt: 1 }}
+                  color={
+                    profile?.kyc_status === "verified" ? "success" : "default"
+                  }
+                />
 
                 <Divider sx={{ my: 2 }} />
 
-                <List disablePadding>
-                  <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <SecurityIcon fontSize="small" color="primary" />
+                <List dense sx={{ textAlign: "left" }}>
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PhoneIcon fontSize="small" color="primary" />
                     </ListItemIcon>
                     <ListItemText
-                      primary="Network"
-                      secondary={getNetworkName(networkId)}
+                      primary="Phone"
+                      secondary={profile?.phone_number || "Not provided"}
                     />
                   </ListItem>
-
-                  <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <HistoryIcon fontSize="small" color="primary" />
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PersonIcon fontSize="small" color="primary" />
                     </ListItemIcon>
                     <ListItemText
-                      primary="Transactions"
-                      secondary="23 completed"
+                      primary="Employment"
+                      secondary={profile?.employment_status || "Not provided"}
                     />
                   </ListItem>
-
-                  <ListItem disablePadding>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <SettingsIcon fontSize="small" color="primary" />
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <EventIcon fontSize="small" color="primary" />
                     </ListItemIcon>
-                    <ListItemText primary="Account Type" secondary="Standard" />
+                    <ListItemText
+                      primary="Member since"
+                      secondary={
+                        profileData?.created_at
+                          ? new Date(
+                              profileData.created_at,
+                            ).toLocaleDateString()
+                          : "-"
+                      }
+                    />
                   </ListItem>
                 </List>
 
@@ -151,302 +286,295 @@ const Profile = () => {
                   variant="outlined"
                   color="primary"
                   fullWidth
-                  sx={{ mt: 3 }}
+                  startIcon={<SettingsIcon />}
+                  sx={{ mt: 2 }}
                   onClick={logout}
                 >
-                  Disconnect Wallet
+                  Sign Out
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
-        </Grid>
 
-        {/* Credit Status */}
-        <Grid item xs={12} md={8}>
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Card>
-              <CardContent sx={{ p: 3 }}>
+            {/* Credit summary */}
+            <Card sx={{ borderRadius: 3, mt: 3 }}>
+              <CardContent sx={{ p: 3, textAlign: "center" }}>
                 <Typography variant="h6" gutterBottom>
-                  Credit Status
+                  Credit Score
                 </Typography>
+                {needsWallet ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Add a wallet address below to calculate your score.
+                  </Typography>
+                ) : (
+                  <>
+                    <Box sx={{ maxWidth: 200, mx: "auto" }}>
+                      <CreditScoreGauge score={creditData?.score || 0} />
+                    </Box>
+                    <Chip
+                      label={creditData?.score_grade || "Not calculated"}
+                      color={
+                        creditData?.score_grade === "Excellent" ||
+                        creditData?.score_grade === "Very Good"
+                          ? "success"
+                          : creditData?.score_grade === "Good"
+                            ? "primary"
+                            : creditData?.score_grade === "Fair"
+                              ? "warning"
+                              : "default"
+                      }
+                      sx={{ mt: 1 }}
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
 
-                <Grid container spacing={2} sx={{ mb: 3 }}>
-                  <Grid item xs={12} sm={4}>
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: 2,
-                        bgcolor: "background.default",
-                        borderRadius: 2,
-                        height: "100%",
-                      }}
-                    >
-                      <Typography
-                        variant="subtitle2"
-                        color="text.secondary"
-                        gutterBottom
-                      >
-                        Credit Score
-                      </Typography>
-                      <Typography
-                        variant="h4"
-                        sx={{ fontWeight: 600, color: "primary.main" }}
-                      >
-                        720
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Good
-                      </Typography>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: 2,
-                        bgcolor: "background.default",
-                        borderRadius: 2,
-                        height: "100%",
-                      }}
-                    >
-                      <Typography
-                        variant="subtitle2"
-                        color="text.secondary"
-                        gutterBottom
-                      >
-                        Active Loans
-                      </Typography>
-                      <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                        1
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        $5,000 outstanding
-                      </Typography>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12} sm={4}>
-                    <Paper
-                      elevation={0}
-                      sx={{
-                        p: 2,
-                        bgcolor: "background.default",
-                        borderRadius: 2,
-                        height: "100%",
-                      }}
-                    >
-                      <Typography
-                        variant="subtitle2"
-                        color="text.secondary"
-                        gutterBottom
-                      >
-                        Repayment Rate
-                      </Typography>
-                      <Typography
-                        variant="h4"
-                        sx={{ fontWeight: 600, color: "success.main" }}
-                      >
-                        98%
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Excellent
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-
-                <Typography
-                  variant="subtitle1"
-                  gutterBottom
-                  sx={{ mt: 4, mb: 2 }}
+          {/* Editable profile details */}
+          <Grid item xs={12} md={8}>
+            <Card sx={{ borderRadius: 3, mb: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 2,
+                  }}
                 >
-                  Credit Factors
-                </Typography>
-
-                <List>
-                  {[
-                    {
-                      factor: "Payment History",
-                      status: "Excellent",
-                      description:
-                        "You have a strong history of on-time payments",
-                      positive: true,
-                    },
-                    {
-                      factor: "Credit Utilization",
-                      status: "Good",
-                      description:
-                        "Your current loan amount is well within your capacity",
-                      positive: true,
-                    },
-                    {
-                      factor: "Credit Age",
-                      status: "Fair",
-                      description: "Your credit history is relatively new",
-                      positive: false,
-                    },
-                    {
-                      factor: "Credit Mix",
-                      status: "Poor",
-                      description: "You have limited variety in credit types",
-                      positive: false,
-                    },
-                  ].map((item, index) => (
-                    <ListItem
-                      key={index}
-                      sx={{
-                        py: 1.5,
-                        px: 2,
-                        mb: 1,
-                        bgcolor: "background.default",
-                        borderRadius: 2,
-                      }}
+                  <Typography variant="h6">Personal Details</Typography>
+                  {!isEditing ? (
+                    <Button
+                      startIcon={<EditIcon />}
+                      onClick={() => setIsEditing(true)}
                     >
-                      <ListItemIcon>
-                        {item.positive ? (
-                          <CheckCircleIcon color="success" />
-                        ) : (
-                          <ErrorIcon color="warning" />
-                        )}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <Typography variant="body1" fontWeight={500}>
-                              {item.factor}
-                            </Typography>
-                            <Chip
-                              label={item.status}
-                              size="small"
-                              color={
-                                item.status === "Excellent"
-                                  ? "success"
-                                  : item.status === "Good"
-                                    ? "primary"
-                                    : item.status === "Fair"
-                                      ? "warning"
-                                      : "error"
-                              }
-                              sx={{ fontWeight: 500 }}
-                            />
-                          </Box>
-                        }
-                        secondary={item.description}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-
-                <Box sx={{ mt: 3, display: "flex", justifyContent: "center" }}>
-                  <Button variant="contained" color="primary">
-                    View Detailed Report
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-
-        {/* Improvement Tips */}
-        <Grid item xs={12}>
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Credit Improvement Tips
-                </Typography>
-
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                  {[
-                    {
-                      title: "Diversify Your Credit Mix",
-                      description:
-                        "Consider adding different types of credit to your portfolio, such as a small secured loan.",
-                      icon: (
-                        <SettingsIcon
-                          sx={{
-                            fontSize: 40,
-                            color: theme.palette.primary.main,
-                          }}
-                        />
-                      ),
-                    },
-                    {
-                      title: "Build Credit History",
-                      description:
-                        "Continue making on-time payments to establish a longer credit history.",
-                      icon: (
-                        <HistoryIcon
-                          sx={{
-                            fontSize: 40,
-                            color: theme.palette.primary.main,
-                          }}
-                        />
-                      ),
-                    },
-                    {
-                      title: "Monitor Your Score",
-                      description:
-                        "Regularly check your credit score to track improvements and detect issues early.",
-                      icon: (
-                        <SecurityIcon
-                          sx={{
-                            fontSize: 40,
-                            color: theme.palette.primary.main,
-                          }}
-                        />
-                      ),
-                    },
-                  ].map((tip, index) => (
-                    <Grid item xs={12} md={4} key={index}>
-                      <Paper
-                        elevation={0}
-                        sx={{
-                          p: 2,
-                          height: "100%",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          textAlign: "center",
-                          bgcolor: "background.default",
-                          borderRadius: 2,
-                        }}
+                      Edit
+                    </Button>
+                  ) : (
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <Button onClick={handleCancel} disabled={saving}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        onClick={handleSave}
+                        disabled={saving}
                       >
-                        <Box sx={{ mb: 2 }}>{tip.icon}</Box>
-                        <Typography
-                          variant="subtitle1"
-                          gutterBottom
-                          fontWeight={500}
-                        >
-                          {tip.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {tip.description}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  ))}
+                        {saving ? "Saving..." : "Save"}
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
+
+                {saveError && (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    {saveError}
+                  </Alert>
+                )}
+
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="First name"
+                      fullWidth
+                      value={form.first_name}
+                      onChange={handleChange("first_name")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Last name"
+                      fullWidth
+                      value={form.last_name}
+                      onChange={handleChange("last_name")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Phone number"
+                      fullWidth
+                      value={form.phone_number}
+                      onChange={handleChange("phone_number")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      select
+                      label="Employment status"
+                      fullWidth
+                      value={form.employment_status}
+                      onChange={handleChange("employment_status")}
+                      disabled={!isEditing}
+                    >
+                      <MenuItem value="">Not specified</MenuItem>
+                      {EMPLOYMENT_STATUSES.map((status) => (
+                        <MenuItem key={status} value={status}>
+                          {status}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Employer name"
+                      fullWidth
+                      value={form.employer_name}
+                      onChange={handleChange("employer_name")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Annual income"
+                      type="number"
+                      fullWidth
+                      value={form.annual_income}
+                      onChange={handleChange("annual_income")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Street address"
+                      fullWidth
+                      value={form.street_address}
+                      onChange={handleChange("street_address")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      label="City"
+                      fullWidth
+                      value={form.city}
+                      onChange={handleChange("city")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      label="State / Province"
+                      fullWidth
+                      value={form.state}
+                      onChange={handleChange("state")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      label="Postal code"
+                      fullWidth
+                      value={form.postal_code}
+                      onChange={handleChange("postal_code")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Country"
+                      fullWidth
+                      value={form.country}
+                      onChange={handleChange("country")}
+                      disabled={!isEditing}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Wallet address"
+                      fullWidth
+                      value={form.wallet_address}
+                      onChange={handleChange("wallet_address")}
+                      disabled={!isEditing}
+                      placeholder="0x..."
+                      helperText="Used to include your on-chain activity in your credit score"
+                    />
+                  </Grid>
                 </Grid>
               </CardContent>
             </Card>
-          </motion.div>
+
+            {creditData?.score_breakdown && (
+              <Box sx={{ mb: 3 }}>
+                <CreditFactors scoreBreakdown={creditData.score_breakdown} />
+              </Box>
+            )}
+
+            {/* Loan applications */}
+            <Card sx={{ borderRadius: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  My Loan Applications
+                </Typography>
+                {applicationsLoading ? (
+                  <Box
+                    sx={{ display: "flex", justifyContent: "center", py: 3 }}
+                  >
+                    <CircularProgress size={28} />
+                  </Box>
+                ) : applications.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    You have not applied for any loans yet.
+                  </Typography>
+                ) : (
+                  <List disablePadding>
+                    {applications.map((application, index) => (
+                      <ListItem
+                        key={application.id}
+                        disableGutters
+                        divider={index < applications.length - 1}
+                        sx={{ py: 1.5 }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                flexWrap: "wrap",
+                                gap: 1,
+                              }}
+                            >
+                              <Typography sx={{ fontWeight: 500 }}>
+                                {application.loan_type
+                                  ?.replace(/_/g, " ")
+                                  .replace(/^\w/, (c) => c.toUpperCase())}{" "}
+                                Loan
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={application.status?.replace(/_/g, " ")}
+                                color={
+                                  statusColor[application.status] || "default"
+                                }
+                                sx={{ textTransform: "capitalize" }}
+                              />
+                            </Box>
+                          }
+                          secondary={`$${Number(
+                            application.requested_amount,
+                          ).toLocaleString()} over ${application.requested_term_months} months`}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-      </Grid>
-    </motion.div>
+      </motion.div>
+
+      <Snackbar
+        open={saveSuccess}
+        autoHideDuration={4000}
+        onClose={() => setSaveSuccess(false)}
+        message="Profile updated successfully"
+      />
+    </Container>
   );
 };
 

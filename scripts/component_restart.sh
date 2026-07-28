@@ -10,6 +10,14 @@
 # - Change detection
 # - Hot reload configuration
 # - Process management
+#
+# Components map to real project directories as follows:
+#   backend    -> code/backend       (Python/Flask, started with `python app.py`)
+#   blockchain -> code/blockchain    (Truffle; a local chain is started with Ganache,
+#                                      matching truffle-config.js's development network)
+#   frontend   -> web-frontend       (Create React App dev server)
+#   mobile     -> mobile-frontend    (React Native / Metro dev server)
+#   ai         -> code/ai_models     (Python; server.py or app.py)
 # ========================================================================
 
 # Set strict error handling
@@ -22,8 +30,9 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Define project directory
-PROJECT_DIR="$(pwd)"
+# Resolve the project root relative to this script's own location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIG_DIR="${PROJECT_DIR}/.blockscore_config"
 PROCESS_FILE="${CONFIG_DIR}/processes.json"
 
@@ -31,6 +40,11 @@ PROCESS_FILE="${CONFIG_DIR}/processes.json"
 echo -e "${BLUE}================================================================${NC}"
 echo -e "${BLUE}          BlockScore Component Restart System                   ${NC}"
 echo -e "${BLUE}================================================================${NC}"
+
+if ! command -v jq &> /dev/null; then
+  echo -e "${RED}jq is required by this script but was not found. Install it (e.g. apt-get install jq / brew install jq) and try again.${NC}"
+  exit 1
+fi
 
 # Parse command line arguments
 COMPONENTS=()
@@ -47,7 +61,7 @@ print_usage() {
   echo ""
   echo "Components:"
   echo "  all                        Restart all components (default)"
-  echo "  blockchain                 Restart blockchain node"
+  echo "  blockchain                 Restart the local blockchain (Ganache)"
   echo "  backend                    Restart backend services"
   echo "  frontend                   Restart frontend development server"
   echo "  mobile                     Restart mobile development server"
@@ -91,6 +105,11 @@ if [ ${#COMPONENTS[@]} -eq 0 ]; then
   COMPONENTS=("blockchain" "backend" "frontend" "mobile" "ai")
 fi
 
+# "all" expands to every real component
+if [[ " ${COMPONENTS[*]} " == *" all "* ]]; then
+  COMPONENTS=("blockchain" "backend" "frontend" "mobile" "ai")
+fi
+
 # Function to check if a component exists
 component_exists() {
   local component=$1
@@ -103,7 +122,7 @@ component_exists() {
       [ -d "${PROJECT_DIR}/code/backend" ]
       ;;
     frontend)
-      [ -d "${PROJECT_DIR}/code/frontend" ]
+      [ -d "${PROJECT_DIR}/web-frontend" ]
       ;;
     mobile)
       [ -d "${PROJECT_DIR}/mobile-frontend" ]
@@ -115,8 +134,29 @@ component_exists() {
       return 1
       ;;
   esac
+}
 
-  return $?
+# Portable "most recent modification time" scan: prefers GNU find's
+# -printf (Linux), falls back to a stat-based loop that works on both GNU
+# and BSD/macOS stat.
+latest_mtime_in() {
+  local dir=$1
+
+  if find "$dir" -maxdepth 0 -printf '' 2>/dev/null; then
+    find "$dir" -type f \
+      -not -path "*/node_modules/*" \
+      -not -path "*/venv/*" \
+      -not -path "*/.git/*" \
+      -not -path "*/build/*" \
+      -printf '%T@\n' 2>/dev/null | cut -d. -f1 | sort -nr | head -1
+  else
+    find "$dir" -type f \
+      -not -path "*/node_modules/*" \
+      -not -path "*/venv/*" \
+      -not -path "*/.git/*" \
+      -not -path "*/build/*" \
+      -exec stat -f '%m' {} \; 2>/dev/null | sort -nr | head -1
+  fi
 }
 
 # Function to check if a component has been modified
@@ -138,7 +178,7 @@ component_modified() {
       component_dir="${PROJECT_DIR}/code/backend"
       ;;
     frontend)
-      component_dir="${PROJECT_DIR}/code/frontend"
+      component_dir="${PROJECT_DIR}/web-frontend"
       ;;
     mobile)
       component_dir="${PROJECT_DIR}/mobile-frontend"
@@ -154,8 +194,10 @@ component_modified() {
   # Create config directory if it doesn't exist
   mkdir -p "${CONFIG_DIR}"
 
-  # Get the latest modification time
-  local latest_mod_time=$(find "$component_dir" -type f -not -path "*/node_modules/*" -not -path "*/venv/*" -not -path "*/.git/*" -printf "%T@\n" | sort -nr | head -1)
+  # Get the latest modification time (integer epoch seconds)
+  local latest_mod_time
+  latest_mod_time=$(latest_mtime_in "$component_dir")
+  latest_mod_time=${latest_mod_time:-0}
 
   # If last check file doesn't exist, create it and return modified
   if [ ! -f "$last_check_file" ]; then
@@ -164,13 +206,14 @@ component_modified() {
   fi
 
   # Get the last check time
-  local last_check_time=$(cat "$last_check_file")
+  local last_check_time
+  last_check_time=$(cat "$last_check_file")
 
   # Update the last check time
   echo "$latest_mod_time" > "$last_check_file"
 
-  # Compare times
-  if (( $(echo "$latest_mod_time > $last_check_time" | bc -l) )); then
+  # Compare times (plain integer arithmetic; no bc dependency)
+  if [ "$latest_mod_time" -gt "$last_check_time" ]; then
     return 0
   else
     return 1
@@ -185,7 +228,8 @@ get_process_id() {
     return 1
   fi
 
-  local pid=$(jq -r ".$component // \"\"" "$PROCESS_FILE")
+  local pid
+  pid=$(jq -r ".$component // \"\"" "$PROCESS_FILE")
 
   if [ -z "$pid" ] || [ "$pid" = "null" ]; then
     return 1
@@ -211,7 +255,8 @@ save_process_id() {
     echo "{}" > "$PROCESS_FILE"
   fi
 
-  local json=$(cat "$PROCESS_FILE")
+  local json
+  json=$(cat "$PROCESS_FILE")
   json=$(echo "$json" | jq ".$component = \"$pid\"")
   echo "$json" > "$PROCESS_FILE"
 }
@@ -222,14 +267,15 @@ stop_component() {
 
   echo -e "${BLUE}Stopping $component...${NC}"
 
-  local pid=$(get_process_id "$component")
+  local pid
+  pid=$(get_process_id "$component") || true
 
   if [ -n "$pid" ]; then
     echo -e "${YELLOW}Stopping process $pid...${NC}"
     kill -15 "$pid" 2>/dev/null || true
 
     # Wait for process to stop
-    for i in {1..10}; do
+    for _ in $(seq 1 10); do
       if ! ps -p "$pid" > /dev/null; then
         break
       fi
@@ -237,15 +283,18 @@ stop_component() {
     done
 
     # Force kill if still running
-    if ps -p "$pid" > /dev/null; then
+    if ps -p "$pid" > /dev/null 2>&1; then
       echo -e "${RED}Process $pid still running, force killing...${NC}"
       kill -9 "$pid" 2>/dev/null || true
     fi
 
     # Update process file
-    local json=$(cat "$PROCESS_FILE")
-    json=$(echo "$json" | jq "del(.$component)")
-    echo "$json" > "$PROCESS_FILE"
+    if [ -f "$PROCESS_FILE" ]; then
+      local json
+      json=$(cat "$PROCESS_FILE")
+      json=$(echo "$json" | jq "del(.$component)")
+      echo "$json" > "$PROCESS_FILE"
+    fi
 
     echo -e "${GREEN}$component stopped${NC}"
   else
@@ -263,10 +312,23 @@ start_component() {
     blockchain)
       if [ -d "${PROJECT_DIR}/code/blockchain" ]; then
         cd "${PROJECT_DIR}/code/blockchain"
-        npx hardhat node > "${CONFIG_DIR}/blockchain.log" 2>&1 &
+        # This project uses Truffle (truffle-config.js), which does not
+        # bundle its own dev chain the way Hardhat does. Ganache provides
+        # the local chain, matching the configured development network
+        # (127.0.0.1:8545).
+        if command -v ganache &> /dev/null; then
+          ganache --port 8545 > "${CONFIG_DIR}/blockchain.log" 2>&1 &
+        elif command -v ganache-cli &> /dev/null; then
+          ganache-cli --port 8545 > "${CONFIG_DIR}/blockchain.log" 2>&1 &
+        elif command -v npx &> /dev/null; then
+          npx --yes ganache --port 8545 > "${CONFIG_DIR}/blockchain.log" 2>&1 &
+        else
+          echo -e "${RED}Neither ganache nor npx found. Install Node.js and Ganache (npm i -g ganache).${NC}"
+          return 1
+        fi
         local pid=$!
         save_process_id "$component" "$pid"
-        echo -e "${GREEN}Blockchain node started with PID $pid${NC}"
+        echo -e "${GREEN}Local blockchain (Ganache) started with PID $pid${NC}"
       else
         echo -e "${RED}Blockchain directory not found${NC}"
         return 1
@@ -275,17 +337,21 @@ start_component() {
     backend)
       if [ -d "${PROJECT_DIR}/code/backend" ]; then
         cd "${PROJECT_DIR}/code/backend"
-        if [ -f "package.json" ]; then
-          if grep -q "\"dev\"" package.json; then
-            npm run dev > "${CONFIG_DIR}/backend.log" 2>&1 &
+        if [ -f "app.py" ]; then
+          if [ -d "${PROJECT_DIR}/venv" ]; then
+            # shellcheck source=/dev/null
+            source "${PROJECT_DIR}/venv/bin/activate"
+            python app.py > "${CONFIG_DIR}/backend.log" 2>&1 &
+            local pid=$!
+            deactivate
           else
-            npm start > "${CONFIG_DIR}/backend.log" 2>&1 &
+            python3 app.py > "${CONFIG_DIR}/backend.log" 2>&1 &
+            local pid=$!
           fi
-          local pid=$!
           save_process_id "$component" "$pid"
           echo -e "${GREEN}Backend services started with PID $pid${NC}"
         else
-          echo -e "${RED}Backend package.json not found${NC}"
+          echo -e "${RED}Backend entry point (app.py) not found${NC}"
           return 1
         fi
       else
@@ -294,8 +360,8 @@ start_component() {
       fi
       ;;
     frontend)
-      if [ -d "${PROJECT_DIR}/code/frontend" ]; then
-        cd "${PROJECT_DIR}/code/frontend"
+      if [ -d "${PROJECT_DIR}/web-frontend" ]; then
+        cd "${PROJECT_DIR}/web-frontend"
         if [ -f "package.json" ]; then
           if grep -q "\"dev\"" package.json; then
             npm run dev > "${CONFIG_DIR}/frontend.log" 2>&1 &
@@ -335,22 +401,25 @@ start_component() {
       if [ -d "${PROJECT_DIR}/code/ai_models" ]; then
         cd "${PROJECT_DIR}/code/ai_models"
         # Activate virtual environment if it exists
+        local python_cmd="python3"
         if [ -d "${PROJECT_DIR}/venv" ]; then
+          # shellcheck source=/dev/null
           source "${PROJECT_DIR}/venv/bin/activate"
+          python_cmd="python"
         fi
         # Run the AI service
-        if [ -f "app.py" ]; then
-          python app.py > "${CONFIG_DIR}/ai.log" 2>&1 &
+        if [ -f "server.py" ]; then
+          "$python_cmd" server.py > "${CONFIG_DIR}/ai.log" 2>&1 &
           local pid=$!
           save_process_id "$component" "$pid"
           echo -e "${GREEN}AI services started with PID $pid${NC}"
-        elif [ -f "server.py" ]; then
-          python server.py > "${CONFIG_DIR}/ai.log" 2>&1 &
+        elif [ -f "app.py" ]; then
+          "$python_cmd" app.py > "${CONFIG_DIR}/ai.log" 2>&1 &
           local pid=$!
           save_process_id "$component" "$pid"
           echo -e "${GREEN}AI services started with PID $pid${NC}"
         else
-          echo -e "${RED}AI service entry point not found${NC}"
+          echo -e "${RED}AI service entry point not found (expected server.py or app.py)${NC}"
           return 1
         fi
       else
@@ -411,7 +480,8 @@ create_status_report() {
   local first=true
 
   for component in blockchain backend frontend mobile ai; do
-    local pid=$(get_process_id "$component")
+    local pid
+    pid=$(get_process_id "$component") || true
     local status="stopped"
 
     if [ -n "$pid" ]; then

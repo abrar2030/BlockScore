@@ -1,6 +1,7 @@
 /**
  * Authentication Service
- * Handles user authentication, registration, and wallet management
+ * Handles user authentication, registration, and profile management against
+ * the real Flask backend (code/backend/app.py, /api/auth/* and /api/profile).
  */
 
 import { API_CONFIG } from "../config/api.config";
@@ -13,37 +14,86 @@ import {
 } from "./storage.service";
 
 export interface LoginRequest {
-  username: string;
+  email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface RegisterRequest {
-  username: string;
+  email: string;
   password: string;
+  confirmPassword: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface BackendUser {
+  id: string;
+  email: string;
+  status: string;
+  is_active: boolean;
+  email_verified: boolean;
+  mfa_enabled: boolean;
+  last_login: string | null;
+  created_at: string;
+  updated_at: string;
+  profile?: {
+    id: string;
+    user_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    full_name: string;
+    phone_number: string | null;
+    address: {
+      street_address: string | null;
+      address_line2: string | null;
+      city: string | null;
+      state: string | null;
+      postal_code: string | null;
+      country: string | null;
+    };
+    kyc_status: string;
+    annual_income: number | null;
+    employment_status: string | null;
+    employer_name: string | null;
+    wallet_address: string | null;
+    wallet_verified: boolean;
+  };
 }
 
 export interface LoginResponse {
   success: boolean;
-  data: {
-    token: string;
-    user: {
-      username: string;
-      role: string;
-      walletAddress?: string;
-    };
-  };
+  message?: string;
+  user: BackendUser;
+  access_token: string;
+  refresh_token?: string;
+  tokens?: { access_token: string; refresh_token: string };
 }
 
 export interface RegisterResponse {
   success: boolean;
-  data: {
-    username: string;
-    role: string;
-  };
+  message?: string;
+  user: BackendUser;
+  user_id: string;
+}
+
+export interface ProfileUpdatePayload {
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  annual_income?: number | null;
+  employment_status?: string;
+  employer_name?: string;
+  wallet_address?: string | null;
 }
 
 /**
- * Login user
+ * Sign in with email and password.
  */
 export const login = async (
   credentials: LoginRequest,
@@ -51,19 +101,26 @@ export const login = async (
   try {
     const response = await httpClient.post<LoginResponse>(
       API_CONFIG.ENDPOINTS.AUTH.LOGIN,
-      credentials,
+      {
+        email: credentials.email,
+        password: credentials.password,
+        remember_me: credentials.rememberMe ?? false,
+      },
     );
 
-    if (response.data.success && response.data.data) {
-      // Save token and user data
-      await saveToken(response.data.data.token);
-      await saveUser(response.data.data.user);
-      if (response.data.data.user.walletAddress) {
-        await saveWalletAddress(response.data.data.user.walletAddress);
+    const data = response.data;
+    const accessToken = data.access_token || data.tokens?.access_token;
+
+    if (data.success && accessToken) {
+      await saveToken(accessToken);
+      await saveUser(data.user);
+      const walletAddress = data.user?.profile?.wallet_address;
+      if (walletAddress) {
+        await saveWalletAddress(walletAddress);
       }
     }
 
-    return response.data;
+    return data;
   } catch (error: any) {
     throw new Error(
       error.response?.data?.message || "Failed to login. Please try again.",
@@ -72,7 +129,9 @@ export const login = async (
 };
 
 /**
- * Register new user
+ * Register a new account. Registration does not return a session; callers
+ * should follow up with login() to sign the new user in, matching the
+ * backend's behavior.
  */
 export const register = async (
   userData: RegisterRequest,
@@ -80,7 +139,15 @@ export const register = async (
   try {
     const response = await httpClient.post<RegisterResponse>(
       API_CONFIG.ENDPOINTS.AUTH.REGISTER,
-      userData,
+      {
+        email: userData.email,
+        password: userData.password,
+        confirm_password: userData.confirmPassword,
+        first_name: userData.firstName,
+        last_name: userData.lastName,
+        terms_accepted: true,
+        privacy_accepted: true,
+      },
     );
 
     return response.data;
@@ -92,37 +159,54 @@ export const register = async (
 };
 
 /**
- * Update wallet address
+ * Fetch the current user's full profile. Also used to restore a session from
+ * a persisted token, since there is no dedicated "current user" endpoint.
  */
-export const updateWalletAddress = async (
-  walletAddress: string,
-): Promise<any> => {
+export const getProfile = async (): Promise<BackendUser> => {
+  const response = await httpClient.get<{
+    success: boolean;
+    data: BackendUser;
+  }>(API_CONFIG.ENDPOINTS.PROFILE.GET);
+  return response.data.data;
+};
+
+/**
+ * Update the current user's profile, including their wallet address.
+ */
+export const updateProfile = async (
+  payload: ProfileUpdatePayload,
+): Promise<BackendUser> => {
   try {
-    const response = await httpClient.post(API_CONFIG.ENDPOINTS.AUTH.WALLET, {
-      walletAddress,
-    });
+    const response = await httpClient.put<{
+      success: boolean;
+      data: BackendUser;
+    }>(API_CONFIG.ENDPOINTS.PROFILE.UPDATE, payload);
 
-    if (response.data.success) {
-      await saveWalletAddress(walletAddress);
+    const updated = response.data.data;
+    await saveUser(updated);
+    if (payload.wallet_address) {
+      await saveWalletAddress(payload.wallet_address);
     }
-
-    return response.data;
+    return updated;
   } catch (error: any) {
     throw new Error(
       error.response?.data?.message ||
-        "Failed to update wallet address. Please try again.",
+        "Failed to update profile. Please try again.",
     );
   }
 };
 
 /**
- * Logout user
+ * Sign out: best-effort notify the backend, then always clear local session
+ * data regardless of whether the network call succeeds.
  */
 export const logout = async (): Promise<void> => {
   try {
-    await clearAll();
+    await httpClient.post(API_CONFIG.ENDPOINTS.AUTH.LOGOUT);
   } catch (error) {
-    console.error("Error during logout:", error);
-    throw error;
+    // Non-fatal: proceed to clear the local session either way.
+    console.error("Error notifying backend of logout:", error);
+  } finally {
+    await clearAll();
   }
 };

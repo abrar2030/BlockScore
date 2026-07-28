@@ -5,9 +5,16 @@
 # This script automates the deployment of smart contracts to different
 # blockchain networks with proper configuration and verification.
 #
+# This project uses Truffle (see code/blockchain/truffle-config.js), not
+# Hardhat. Truffle's config currently only defines a "development" network
+# (127.0.0.1:8545); deploying to "test" or "mainnet" requires adding a
+# matching network entry to truffle-config.js first (typically via
+# @truffle/hdwallet-provider using PROVIDER_URL/PRIVATE_KEY, which this
+# script already loads from .env.<network>).
+#
 # Features:
 # - Multi-network deployment support (development, test, mainnet)
-# - Contract verification on block explorers
+# - Contract verification on block explorers (requires truffle-plugin-verify)
 # - Gas optimization
 # - Deployment tracking and history
 # - Security checks before deployment
@@ -23,8 +30,9 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Define project directory
-PROJECT_DIR="$(pwd)"
+# Resolve the project root relative to this script's own location.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BLOCKCHAIN_DIR="${PROJECT_DIR}/code/blockchain"
 CONFIG_DIR="${PROJECT_DIR}/.blockscore_config"
 DEPLOYMENT_LOG="${PROJECT_DIR}/deployment.log"
@@ -49,7 +57,7 @@ print_usage() {
   echo "Options:"
   echo "  -h, --help                 Show this help message"
   echo "  -n, --network <network>    Specify network (development, test, mainnet)"
-  echo "  -v, --verify               Verify contracts on block explorer"
+  echo "  -v, --verify               Verify contracts on block explorer (requires truffle-plugin-verify)"
   echo "  --no-gas-optimization      Disable gas optimization"
   echo "  --no-security-check        Disable security checks"
   echo ""
@@ -101,7 +109,8 @@ fi
 log_message() {
   local level=$1
   local message=$2
-  local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+  local timestamp
+  timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
   echo "[$timestamp] [$level] $message" >> "$DEPLOYMENT_LOG"
 
@@ -124,19 +133,41 @@ log_message() {
   esac
 }
 
-# Function to check if blockchain directory exists
+# Function to check if the blockchain directory and Truffle config exist
 check_blockchain_directory() {
   if [ ! -d "$BLOCKCHAIN_DIR" ]; then
     log_message "ERROR" "Blockchain directory not found: $BLOCKCHAIN_DIR"
     exit 1
   fi
 
-  if [ ! -f "${BLOCKCHAIN_DIR}/hardhat.config.js" ] && [ ! -f "${BLOCKCHAIN_DIR}/hardhat.config.ts" ]; then
-    log_message "ERROR" "Hardhat configuration not found in blockchain directory"
+  if [ ! -f "${BLOCKCHAIN_DIR}/truffle-config.js" ]; then
+    log_message "ERROR" "truffle-config.js not found in blockchain directory"
     exit 1
-  }
+  fi
+
+  if ! command -v npx &> /dev/null; then
+    log_message "ERROR" "npx not found. Install Node.js to run Truffle."
+    exit 1
+  fi
 
   log_message "INFO" "Blockchain directory validated"
+}
+
+# Function to confirm the requested network is actually defined in
+# truffle-config.js, so a missing network fails with a clear, actionable
+# message instead of a confusing Truffle error deep into the process.
+validate_network_configured() {
+  log_message "INFO" "Checking that network '$NETWORK' is configured in truffle-config.js"
+
+  cd "$BLOCKCHAIN_DIR"
+
+  if node -e "const cfg = require('./truffle-config.js'); process.exit(cfg.networks && cfg.networks['$NETWORK'] ? 0 : 1);" 2>/dev/null; then
+    log_message "SUCCESS" "Network '$NETWORK' is configured"
+  else
+    log_message "ERROR" "Network '$NETWORK' is not defined in ${BLOCKCHAIN_DIR}/truffle-config.js"
+    log_message "ERROR" "Add a networks.$NETWORK entry (see the Truffle docs for @truffle/hdwallet-provider) before deploying to this network."
+    exit 1
+  fi
 }
 
 # Function to load environment variables
@@ -145,6 +176,7 @@ load_environment_variables() {
 
   # Check if .env file exists
   if [ -f "${BLOCKCHAIN_DIR}/.env" ]; then
+    # shellcheck source=/dev/null
     source "${BLOCKCHAIN_DIR}/.env"
     log_message "INFO" "Loaded environment variables from .env file"
   else
@@ -153,6 +185,7 @@ load_environment_variables() {
 
   # Check if network-specific .env file exists
   if [ -f "${BLOCKCHAIN_DIR}/.env.${NETWORK}" ]; then
+    # shellcheck source=/dev/null
     source "${BLOCKCHAIN_DIR}/.env.${NETWORK}"
     log_message "INFO" "Loaded environment variables from .env.${NETWORK} file"
   fi
@@ -173,53 +206,65 @@ load_environment_variables() {
   log_message "SUCCESS" "Environment variables loaded successfully"
 }
 
+# Ensure code/blockchain has a package.json so devDependency installs
+# (e.g. solhint) have somewhere to record themselves; the directory ships
+# without one since contracts are compiled via a globally available truffle.
+ensure_package_json() {
+  cd "$BLOCKCHAIN_DIR"
+  if [ ! -f "package.json" ]; then
+    log_message "INFO" "No package.json in blockchain directory; creating one"
+    npm init -y > /dev/null
+  fi
+}
+
 # Function to run security checks
 run_security_checks() {
   if [ "$SECURITY_CHECK" = false ]; then
     log_message "WARNING" "Security checks disabled"
     return 0
-  }
+  fi
 
   log_message "INFO" "Running security checks on smart contracts"
 
   cd "$BLOCKCHAIN_DIR"
+  ensure_package_json
 
   # Check if solhint is installed
-  if ! npm list -g solhint > /dev/null 2>&1 && ! npm list solhint > /dev/null 2>&1; then
+  if ! npm list solhint > /dev/null 2>&1 && ! command -v solhint &> /dev/null; then
     log_message "INFO" "Installing solhint..."
     npm install --save-dev solhint
   fi
 
   # Run solhint
   log_message "INFO" "Running solhint..."
-  npx solhint "contracts/**/*.sol" || {
+  if ! npx solhint "contracts/**/*.sol"; then
     log_message "ERROR" "Solhint found issues in smart contracts"
-    read -p "Continue with deployment despite security issues? (y/n) " -n 1 -r
+    read -r -p "Continue with deployment despite security issues? (y/n) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
       log_message "INFO" "Deployment aborted by user"
       exit 1
     fi
-  }
+  fi
 
   # Check if slither is installed (if Python is available)
-  if command -v python3 > /dev/null && ! pip list | grep slither-analyzer > /dev/null; then
+  if command -v python3 > /dev/null && ! pip show slither-analyzer > /dev/null 2>&1; then
     log_message "INFO" "Installing slither-analyzer..."
-    pip install slither-analyzer
+    pip install slither-analyzer || log_message "WARNING" "Could not install slither-analyzer; skipping"
   fi
 
   # Run slither if available
   if command -v slither > /dev/null; then
     log_message "INFO" "Running slither..."
-    slither . || {
+    if ! slither .; then
       log_message "WARNING" "Slither found potential vulnerabilities"
-      read -p "Continue with deployment despite potential vulnerabilities? (y/n) " -n 1 -r
+      read -r -p "Continue with deployment despite potential vulnerabilities? (y/n) " -n 1 -r
       echo
       if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_message "INFO" "Deployment aborted by user"
         exit 1
       fi
-    }
+    fi
   else
     log_message "WARNING" "Slither not available, skipping advanced vulnerability checks"
   fi
@@ -227,42 +272,41 @@ run_security_checks() {
   log_message "SUCCESS" "Security checks completed"
 }
 
-# Function to optimize gas usage
+# Function to optimize gas usage (Truffle's compilers.solc.settings.optimizer,
+# not Hardhat's solidity.settings.optimizer)
 optimize_gas() {
   if [ "$GAS_OPTIMIZATION" = false ]; then
     log_message "WARNING" "Gas optimization disabled"
     return 0
-  }
+  fi
 
   log_message "INFO" "Optimizing gas usage for smart contracts"
 
   cd "$BLOCKCHAIN_DIR"
 
-  # Check if hardhat.config.js or hardhat.config.ts exists
-  if [ -f "hardhat.config.js" ]; then
-    CONFIG_FILE="hardhat.config.js"
-  elif [ -f "hardhat.config.ts" ]; then
-    CONFIG_FILE="hardhat.config.ts"
-  else
-    log_message "ERROR" "Hardhat configuration file not found"
+  CONFIG_FILE="truffle-config.js"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    log_message "ERROR" "truffle-config.js not found"
     exit 1
   fi
 
-  # Check if optimization is already enabled
-  if grep -q "optimizer: { enabled: true" "$CONFIG_FILE"; then
+  # Check if optimization is already enabled. Checked as two separate
+  # patterns (rather than one regex spanning both) since grep matches
+  # line-by-line and real-world configs commonly format this across
+  # multiple lines, e.g.:
+  #   optimizer: {
+  #     enabled: true,
+  if grep -q "optimizer:" "$CONFIG_FILE" && grep -qE "enabled:\s*true" "$CONFIG_FILE"; then
     log_message "INFO" "Gas optimization already enabled in $CONFIG_FILE"
+  elif grep -q "compilers:" "$CONFIG_FILE"; then
+    log_message "WARNING" "A compilers block exists in $CONFIG_FILE but optimizer settings were not detected in the expected format."
+    log_message "WARNING" "Please verify compilers.solc.settings.optimizer manually; leaving the file untouched."
   else
     # Backup the config file
     cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
 
-    # Add optimization settings
-    if grep -q "solidity:" "$CONFIG_FILE"; then
-      # Update existing solidity settings
-      sed -i 's/solidity: {/solidity: {\n    settings: {\n      optimizer: { enabled: true, runs: 200 },\n    },/g' "$CONFIG_FILE"
-    else
-      # Add new solidity settings
-      sed -i '/module.exports = {/a \  solidity: {\n    settings: {\n      optimizer: { enabled: true, runs: 200 },\n    },\n  },' "$CONFIG_FILE"
-    fi
+    # Add a compilers block with the optimizer enabled
+    sed -i '/module.exports = {/a \  compilers: {\n    solc: {\n      settings: {\n        optimizer: { enabled: true, runs: 200 },\n      },\n    },\n  },' "$CONFIG_FILE"
 
     log_message "SUCCESS" "Gas optimization enabled in $CONFIG_FILE"
   fi
@@ -274,19 +318,13 @@ compile_contracts() {
 
   cd "$BLOCKCHAIN_DIR"
 
-  # Clean artifacts and cache
-  if [ -d "artifacts" ]; then
-    rm -rf artifacts
-  fi
-
-  if [ -d "cache" ]; then
-    rm -rf cache
+  # Clean the build output directory
+  if [ -d "build" ]; then
+    rm -rf build
   fi
 
   # Compile contracts
-  npx hardhat compile
-
-  if [ $? -ne 0 ]; then
+  if ! npx truffle compile; then
     log_message "ERROR" "Failed to compile smart contracts"
     exit 1
   fi
@@ -302,31 +340,50 @@ deploy_contracts() {
 
   # Create deployment directory if it doesn't exist
   mkdir -p "deployments/$NETWORK"
+  MIGRATE_OUTPUT="deployments/$NETWORK/migrate_output_$(date +%Y%m%d%H%M%S).log"
 
-  # Run deployment script
-  if [ -f "scripts/deploy.js" ]; then
-    DEPLOY_SCRIPT="scripts/deploy.js"
-  elif [ -f "scripts/deploy.ts" ]; then
-    DEPLOY_SCRIPT="scripts/deploy.ts"
-  else
-    log_message "ERROR" "Deployment script not found"
-    exit 1
-  fi
+  log_message "INFO" "Running: truffle migrate --network $NETWORK"
 
-  log_message "INFO" "Running deployment script: $DEPLOY_SCRIPT"
-
-  # Deploy contracts
-  npx hardhat run "$DEPLOY_SCRIPT" --network "$NETWORK"
-
-  if [ $? -ne 0 ]; then
+  if ! npx truffle migrate --network "$NETWORK" --reset 2>&1 | tee "$MIGRATE_OUTPUT"; then
     log_message "ERROR" "Failed to deploy smart contracts"
     exit 1
   fi
 
+  # Truffle does not write a clean addresses summary on its own; extract
+  # "Deploying 'ContractName'" / "contract address: 0x..." pairs from the
+  # migration output into deployments/$NETWORK/addresses.json so the rest
+  # of this script (verification, deployment records) has one to read.
+  python3 - "$MIGRATE_OUTPUT" "deployments/$NETWORK/addresses.json" << 'PYEOF'
+import json
+import re
+import sys
+
+log_path, out_path = sys.argv[1], sys.argv[2]
+with open(log_path) as f:
+    text = f.read()
+
+addresses = {}
+current = None
+for line in text.splitlines():
+    m = re.search(r"Deploying '([^']+)'", line)
+    if m:
+        current = m.group(1)
+        continue
+    m = re.search(r"contract address:\s+(0x[a-fA-F0-9]{40})", line)
+    if m and current:
+        addresses[current] = m.group(1)
+        current = None
+
+with open(out_path, "w") as f:
+    json.dump(addresses, f, indent=2)
+
+print(f"Recorded {len(addresses)} deployed contract address(es).")
+PYEOF
+
   log_message "SUCCESS" "Smart contracts deployed successfully to network: $NETWORK"
 }
 
-# Function to verify contracts on block explorer
+# Function to verify contracts on a block explorer via truffle-plugin-verify.
 verify_contracts() {
   if [ "$VERIFY" = false ]; then
     log_message "INFO" "Contract verification skipped"
@@ -342,6 +399,14 @@ verify_contracts() {
 
   cd "$BLOCKCHAIN_DIR"
 
+  if ! npm list truffle-plugin-verify > /dev/null 2>&1; then
+    log_message "WARNING" "truffle-plugin-verify is not installed."
+    log_message "WARNING" "Run: npm install --save-dev truffle-plugin-verify, and add"
+    log_message "WARNING" "  plugins: ['truffle-plugin-verify']"
+    log_message "WARNING" "to truffle-config.js, then re-run with --verify."
+    return 1
+  fi
+
   # Check if deployment addresses file exists
   DEPLOYMENT_FILE="deployments/$NETWORK/addresses.json"
 
@@ -352,18 +417,17 @@ verify_contracts() {
   fi
 
   # Read contract addresses from deployment file
-  CONTRACTS=$(cat "$DEPLOYMENT_FILE" | jq -r 'keys[]')
+  CONTRACTS=$(jq -r 'keys[]' "$DEPLOYMENT_FILE")
 
   for CONTRACT in $CONTRACTS; do
-    ADDRESS=$(cat "$DEPLOYMENT_FILE" | jq -r ".[\"$CONTRACT\"]")
+    ADDRESS=$(jq -r ".[\"$CONTRACT\"]" "$DEPLOYMENT_FILE")
 
     log_message "INFO" "Verifying contract: $CONTRACT at address: $ADDRESS"
 
-    # Verify contract
-    npx hardhat verify --network "$NETWORK" "$ADDRESS" || {
+    if ! npx truffle run verify "${CONTRACT}@${ADDRESS}" --network "$NETWORK"; then
       log_message "WARNING" "Failed to verify contract: $CONTRACT"
       continue
-    }
+    fi
 
     log_message "SUCCESS" "Contract verified: $CONTRACT"
   done
@@ -394,28 +458,14 @@ create_deployment_record() {
 main() {
   log_message "INFO" "Starting smart contract deployment process"
 
-  # Check blockchain directory
   check_blockchain_directory
-
-  # Load environment variables
+  validate_network_configured
   load_environment_variables
-
-  # Run security checks
   run_security_checks
-
-  # Optimize gas usage
   optimize_gas
-
-  # Compile contracts
   compile_contracts
-
-  # Deploy contracts
   deploy_contracts
-
-  # Verify contracts
   verify_contracts
-
-  # Create deployment record
   create_deployment_record
 
   log_message "SUCCESS" "Smart contract deployment process completed"

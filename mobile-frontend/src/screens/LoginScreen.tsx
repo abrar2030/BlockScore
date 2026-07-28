@@ -32,7 +32,7 @@ const colors = {
 };
 
 const LoginScreen = ({ navigation }: any) => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -40,8 +40,8 @@ const LoginScreen = ({ navigation }: any) => {
   const { isLoading, error } = useAppSelector((state) => state.auth);
 
   const handleLogin = async () => {
-    if (!username.trim()) {
-      Alert.alert("Error", "Please enter your username");
+    if (!email.trim()) {
+      Alert.alert("Error", "Please enter your email address");
       return;
     }
 
@@ -51,7 +51,7 @@ const LoginScreen = ({ navigation }: any) => {
     }
 
     try {
-      await dispatch(loginUser({ username, password })).unwrap();
+      await dispatch(loginUser({ email, password })).unwrap();
       // Navigation is handled in App.tsx based on auth state
     } catch (err: any) {
       Alert.alert("Login Failed", err || "Invalid credentials");
@@ -92,7 +92,7 @@ const LoginScreen = ({ navigation }: any) => {
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
             <Icon
-              name="person"
+              name="email"
               type="material"
               color={colors.textSecondary}
               size={responsiveFontSize(2.5)}
@@ -100,12 +100,13 @@ const LoginScreen = ({ navigation }: any) => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Username"
+              placeholder="Email address"
               placeholderTextColor={colors.textSecondary}
-              value={username}
-              onChangeText={setUsername}
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType="email-address"
             />
           </View>
 

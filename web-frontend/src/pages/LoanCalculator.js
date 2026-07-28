@@ -1,13 +1,20 @@
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   CircularProgress,
   Divider,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Slider,
+  Snackbar,
+  TextField,
   Typography,
   useTheme,
 } from "@mui/material";
@@ -25,9 +32,7 @@ import {
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { Doughnut, Line } from "react-chartjs-2";
-import { useAuth } from "../contexts/AuthContext";
-import { useWeb3 } from "../contexts/Web3Context";
-import { calculateLoan } from "../utils/api";
+import { applyForLoan, calculateLoan } from "../utils/api";
 
 ChartJS.register(
   ArcElement,
@@ -40,50 +45,76 @@ ChartJS.register(
   Title,
 );
 
+// Mirrors models/loan.py LoanType values.
+const LOAN_TYPES = [
+  { value: "personal", label: "Personal" },
+  { value: "business", label: "Business" },
+  { value: "mortgage", label: "Mortgage" },
+  { value: "auto", label: "Auto" },
+  { value: "student", label: "Student" },
+  { value: "crypto_backed", label: "Crypto-Backed" },
+];
+
 const LoanCalculator = () => {
   const theme = useTheme();
-  const { user } = useAuth();
-  const { accounts } = useWeb3();
 
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState(5000);
   const [rate, setRate] = useState(5);
   const [term, setTerm] = useState(36);
+  const [loanType, setLoanType] = useState("personal");
+  const [purpose, setPurpose] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState(null);
+  const [applySuccess, setApplySuccess] = useState(null);
 
   const calculateLoanEligibility = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Use the wallet address from context if available, otherwise use demo address
-      const walletAddress =
-        accounts[0] ||
-        user?.address ||
-        "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
-
-      // Use the API service to calculate loan eligibility
-      const data = await calculateLoan(walletAddress, amount, rate);
+      const data = await calculateLoan(amount, rate, term);
       setResult(data);
     } catch (err) {
       console.error("Error calculating loan:", err);
-      setError("Failed to calculate loan eligibility. Please try again later.");
-
-      // For demo purposes, set mock data if API fails
-      setResult({
-        approval_probability: 75.5,
-        monthly_payment: 149.85,
-        credit_score: 720,
-        loan_term: 36,
-        total_payment: 5394.6,
-      });
+      setError(
+        err?.response?.data?.message ||
+          "Failed to calculate loan eligibility. Please try again later.",
+      );
+      setResult(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculate payment schedule
+  const handleApply = async () => {
+    setApplying(true);
+    setApplyError(null);
+    try {
+      const application = await applyForLoan({
+        loanType,
+        amount,
+        termMonths: term,
+        rate,
+        purpose: purpose || undefined,
+      });
+      setApplySuccess(
+        `Application ${application?.application_number || ""} submitted successfully.`,
+      );
+    } catch (err) {
+      setApplyError(
+        err?.response?.data?.message ||
+          "We could not submit your application. Please try again later.",
+      );
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  // Calculate a month-by-month payment schedule locally for the chart; the
+  // backend only returns the aggregate totals, not a full amortization table.
   const generatePaymentSchedule = () => {
     if (!result) return [];
 
@@ -111,7 +142,6 @@ const LoanCalculator = () => {
     return schedule;
   };
 
-  // Prepare chart data
   const paymentSchedule = generatePaymentSchedule();
   const chartData = {
     labels: paymentSchedule.slice(0, 12).map((item) => `Month ${item.month}`),
@@ -131,7 +161,6 @@ const LoanCalculator = () => {
     ],
   };
 
-  // Approval probability chart
   const approvalChartData = {
     labels: ["Approval", "Rejection"],
     datasets: [
@@ -176,6 +205,22 @@ const LoanCalculator = () => {
                 </Typography>
 
                 <Box sx={{ mt: 3 }}>
+                  <FormControl fullWidth sx={{ mb: 3 }}>
+                    <InputLabel id="loan-type-label">Loan Type</InputLabel>
+                    <Select
+                      labelId="loan-type-label"
+                      label="Loan Type"
+                      value={loanType}
+                      onChange={(e) => setLoanType(e.target.value)}
+                    >
+                      {LOAN_TYPES.map((type) => (
+                        <MenuItem key={type.value} value={type.value}>
+                          {type.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
                   <Typography gutterBottom>
                     Loan Amount: ${amount.toLocaleString()}
                   </Typography>
@@ -221,6 +266,15 @@ const LoanCalculator = () => {
                     sx={{ mb: 4 }}
                   />
 
+                  <TextField
+                    label="Purpose (optional)"
+                    fullWidth
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    placeholder="e.g. Debt consolidation, home renovation"
+                    sx={{ mb: 3 }}
+                  />
+
                   <Button
                     variant="contained"
                     fullWidth
@@ -233,9 +287,9 @@ const LoanCalculator = () => {
                   </Button>
 
                   {error && (
-                    <Typography color="error" sx={{ mt: 2 }}>
+                    <Alert severity="error" sx={{ mt: 2 }}>
                       {error}
-                    </Typography>
+                    </Alert>
                   )}
                 </Box>
               </CardContent>
@@ -329,6 +383,9 @@ const LoanCalculator = () => {
                           >
                             {result.approval_probability.toFixed(1)}%
                           </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Based on credit score: {result.credit_score}
+                          </Typography>
                         </Box>
                       </Grid>
 
@@ -404,7 +461,7 @@ const LoanCalculator = () => {
                               Total Payment:
                             </Typography>
                             <Typography variant="body2" fontWeight={500}>
-                              ${(result.monthly_payment * term).toFixed(2)}
+                              ${result.total_payment.toFixed(2)}
                             </Typography>
                           </Box>
 
@@ -418,10 +475,7 @@ const LoanCalculator = () => {
                               Total Interest:
                             </Typography>
                             <Typography variant="body2" fontWeight={500}>
-                              $
-                              {(result.monthly_payment * term - amount).toFixed(
-                                2,
-                              )}
+                              ${result.total_interest.toFixed(2)}
                             </Typography>
                           </Box>
                         </Paper>
@@ -452,6 +506,12 @@ const LoanCalculator = () => {
                       </Box>
                     </Box>
 
+                    {applyError && (
+                      <Alert severity="error" sx={{ mt: 3 }}>
+                        {applyError}
+                      </Alert>
+                    )}
+
                     <Box
                       sx={{
                         mt: 3,
@@ -459,11 +519,17 @@ const LoanCalculator = () => {
                         justifyContent: "center",
                       }}
                     >
-                      <Button variant="outlined" color="primary" sx={{ mr: 2 }}>
-                        Save Results
-                      </Button>
-                      <Button variant="contained" color="secondary">
-                        Apply for Loan
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        onClick={handleApply}
+                        disabled={applying}
+                      >
+                        {applying ? (
+                          <CircularProgress size={22} color="inherit" />
+                        ) : (
+                          "Apply for Loan"
+                        )}
                       </Button>
                     </Box>
                   </Box>
@@ -473,6 +539,13 @@ const LoanCalculator = () => {
           </motion.div>
         </Grid>
       </Grid>
+
+      <Snackbar
+        open={!!applySuccess}
+        autoHideDuration={6000}
+        onClose={() => setApplySuccess(null)}
+        message={applySuccess}
+      />
     </motion.div>
   );
 };

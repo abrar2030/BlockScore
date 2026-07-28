@@ -4,7 +4,6 @@ import CalculateIcon from "@mui/icons-material/Calculate";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import HelpIcon from "@mui/icons-material/Help";
 import HistoryIcon from "@mui/icons-material/History";
-import SettingsIcon from "@mui/icons-material/Settings";
 import {
   Box,
   Divider,
@@ -52,19 +51,14 @@ const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
       path: "/loan-calculator",
     },
     {
-      text: "Wallet",
+      text: "Profile",
       icon: <AccountBalanceWalletIcon />,
       path: "/profile",
     },
     {
-      text: "Transaction History",
+      text: "Credit History",
       icon: <HistoryIcon />,
       path: "/history",
-    },
-    {
-      text: "Settings",
-      icon: <SettingsIcon />,
-      path: "/settings",
     },
     {
       text: "Help & Support",

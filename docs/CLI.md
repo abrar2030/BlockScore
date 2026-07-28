@@ -16,12 +16,12 @@ Command-line interface documentation for BlockScore scripts and tools.
 
 Automated environment setup for BlockScore.
 
-**Location**: `sctipts/setup_blockscore_env.sh`
+**Location**: `scripts/setup_blockscore_env.sh`
 
 **Usage**:
 
 ```bash
-./sctipts/setup_blockscore_env.sh
+./scripts/setup_blockscore_env.sh
 ```
 
 **What it does**:
@@ -37,12 +37,12 @@ Automated environment setup for BlockScore.
 
 Start all BlockScore services.
 
-**Location**: `sctipts/run_blockscore.sh`
+**Location**: `scripts/run_blockscore.sh`
 
 **Usage**:
 
 ```bash
-./sctipts/run_blockscore.sh
+./scripts/run_blockscore.sh
 ```
 
 **Services started**:
@@ -57,12 +57,12 @@ Start all BlockScore services.
 
 Deploy smart contracts to blockchain network.
 
-**Location**: `sctipts/smart_contract_deploy.sh`
+**Location**: `scripts/smart_contract_deploy.sh`
 
 **Usage**:
 
 ```bash
-./sctipts/smart_contract_deploy.sh [network]
+./scripts/smart_contract_deploy.sh [network]
 ```
 
 **Arguments**:
@@ -75,25 +75,25 @@ Deploy smart contracts to blockchain network.
 
 ```bash
 # Deploy to local Ganache
-./sctipts/smart_contract_deploy.sh development
+./scripts/smart_contract_deploy.sh development
 
 # Deploy to Polygon Mumbai testnet
-./sctipts/smart_contract_deploy.sh testnet
+./scripts/smart_contract_deploy.sh testnet
 
 # Deploy to Polygon mainnet
-./sctipts/smart_contract_deploy.sh mainnet
+./scripts/smart_contract_deploy.sh mainnet
 ```
 
 ### component_restart.sh
 
 Restart specific BlockScore components.
 
-**Location**: `sctipts/component_restart.sh`
+**Location**: `scripts/component_restart.sh`
 
 **Usage**:
 
 ```bash
-./sctipts/component_restart.sh [component]
+./scripts/component_restart.sh [component]
 ```
 
 **Components**:
@@ -109,10 +109,10 @@ Restart specific BlockScore components.
 
 ```bash
 # Restart backend only
-./sctipts/component_restart.sh backend
+./scripts/component_restart.sh backend
 
 # Restart all services
-./sctipts/component_restart.sh all
+./scripts/component_restart.sh all
 ```
 
 ## Development Scripts
@@ -121,12 +121,12 @@ Restart specific BlockScore components.
 
 Run linters on entire codebase.
 
-**Location**: `sctipts/lint-all.sh`
+**Location**: `scripts/lint-all.sh`
 
 **Usage**:
 
 ```bash
-./sctipts/lint-all.sh [--fix]
+./scripts/lint-all.sh [--fix]
 ```
 
 **Flags**:
@@ -143,22 +143,22 @@ Run linters on entire codebase.
 
 ```bash
 # Check for issues
-./sctipts/lint-all.sh
+./scripts/lint-all.sh
 
 # Auto-fix issues
-./sctipts/lint-all.sh --fix
+./scripts/lint-all.sh --fix
 ```
 
 ### code_quality_check.sh
 
 Comprehensive code quality analysis.
 
-**Location**: `sctipts/code_quality_check.sh`
+**Location**: `scripts/code_quality_check.sh`
 
 **Usage**:
 
 ```bash
-./sctipts/code_quality_check.sh
+./scripts/code_quality_check.sh
 ```
 
 **Checks performed**:
@@ -362,12 +362,12 @@ python api.py
 
 | Command                    | Arguments          | Description                   | Example                                      |
 | -------------------------- | ------------------ | ----------------------------- | -------------------------------------------- |
-| `setup_blockscore_env.sh`  | None               | Setup development environment | `./sctipts/setup_blockscore_env.sh`          |
-| `run_blockscore.sh`        | None               | Start all services            | `./sctipts/run_blockscore.sh`                |
-| `smart_contract_deploy.sh` | `[network]`        | Deploy smart contracts        | `./sctipts/smart_contract_deploy.sh testnet` |
-| `component_restart.sh`     | `[component]`      | Restart specific component    | `./sctipts/component_restart.sh backend`     |
-| `lint-all.sh`              | `[--fix]`          | Run code linters              | `./sctipts/lint-all.sh --fix`                |
-| `code_quality_check.sh`    | None               | Run quality checks            | `./sctipts/code_quality_check.sh`            |
+| `setup_blockscore_env.sh`  | None               | Setup development environment | `./scripts/setup_blockscore_env.sh`          |
+| `run_blockscore.sh`        | None               | Start all services            | `./scripts/run_blockscore.sh`                |
+| `smart_contract_deploy.sh` | `[network]`        | Deploy smart contracts        | `./scripts/smart_contract_deploy.sh testnet` |
+| `component_restart.sh`     | `[component]`      | Restart specific component    | `./scripts/component_restart.sh backend`     |
+| `lint-all.sh`              | `[--fix]`          | Run code linters              | `./scripts/lint-all.sh --fix`                |
+| `code_quality_check.sh`    | None               | Run quality checks            | `./scripts/code_quality_check.sh`            |
 | `truffle compile`          | None               | Compile Solidity contracts    | `cd code/blockchain && truffle compile`      |
 | `truffle test`             | None               | Run contract tests            | `cd code/blockchain && truffle test`         |
 | `truffle migrate`          | `--network [name]` | Deploy contracts              | `truffle migrate --network mumbai`           |

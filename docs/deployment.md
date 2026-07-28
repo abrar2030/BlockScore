@@ -26,7 +26,7 @@ sudo apt install python3 python3-pip nodejs npm postgresql redis-server nginx
 ```bash
 git clone https://github.com/quantsingularity/BlockScore.git
 cd BlockScore
-./sctipts/setup_blockscore_env.sh
+./scripts/setup_blockscore_env.sh
 ```
 
 3. Configure environment:

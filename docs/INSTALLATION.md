@@ -49,10 +49,10 @@ git clone https://github.com/quantsingularity/BlockScore.git
 cd BlockScore
 
 # Make setup script executable
-chmod +x sctipts/setup_blockscore_env.sh
+chmod +x scripts/setup_blockscore_env.sh
 
 # Run setup
-./sctipts/setup_blockscore_env.sh
+./scripts/setup_blockscore_env.sh
 ```
 
 **What the script does:**

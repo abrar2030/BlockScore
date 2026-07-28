@@ -1,18 +1,29 @@
 /**
  * Credit Slice
- * Redux slice for credit score and history management
+ * Redux slice for credit score and history management, backed by the real
+ * backend (/api/credit/calculate-score, /api/credit/history).
  */
 
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import type { CreditHistory, CreditScore } from "../../services/credit.service";
+import type {
+  CreditHistoryResult,
+  CreditScoreResult,
+} from "../../services/credit.service";
 import * as creditService from "../../services/credit.service";
 
+interface ScoreFactor {
+  name: string;
+  value: number;
+  description?: string;
+}
+
 export interface CreditState {
-  score: CreditScore | null;
-  history: CreditHistory | null;
-  scoreFactors: any[];
+  score: CreditScoreResult | null;
+  history: CreditHistoryResult | null;
+  scoreFactors: ScoreFactor[];
   isLoading: boolean;
   error: string | null;
+  needsWallet: boolean;
 }
 
 const initialState: CreditState = {
@@ -21,17 +32,21 @@ const initialState: CreditState = {
   scoreFactors: [],
   isLoading: false,
   error: null,
+  needsWallet: false,
 };
 
+const isWalletRequiredError = (message: string) =>
+  /wallet address/i.test(message || "");
+
 /**
- * Async thunk for fetching credit score
+ * Fetch the current credit score (cached if still valid).
  */
 export const fetchCreditScore = createAsyncThunk(
   "credit/fetchScore",
-  async (address: string, { rejectWithValue }) => {
+  async (walletAddress: string | undefined, { rejectWithValue }) => {
     try {
-      const score = await creditService.getCreditScore(address);
-      return score;
+      const score = await creditService.getCreditScore(walletAddress);
+      return { score, factors: creditService.getScoreFactors(score) };
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -39,13 +54,34 @@ export const fetchCreditScore = createAsyncThunk(
 );
 
 /**
- * Async thunk for fetching credit history
+ * Force a fresh credit score calculation.
+ */
+export const calculateScore = createAsyncThunk(
+  "credit/calculate",
+  async (walletAddress: string | undefined, { rejectWithValue }) => {
+    try {
+      const score = await creditService.calculateCreditScore(walletAddress);
+      return { score, factors: creditService.getScoreFactors(score) };
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  },
+);
+
+/**
+ * Fetch the current user's credit history.
  */
 export const fetchCreditHistory = createAsyncThunk(
   "credit/fetchHistory",
-  async (address: string, { rejectWithValue }) => {
+  async (
+    params: { page?: number; perPage?: number } | undefined,
+    { rejectWithValue },
+  ) => {
     try {
-      const history = await creditService.getCreditHistory(address);
+      const history = await creditService.getCreditHistory(
+        params?.page,
+        params?.perPage,
+      );
       return history;
     } catch (error: any) {
       return rejectWithValue(error.message);
@@ -53,39 +89,6 @@ export const fetchCreditHistory = createAsyncThunk(
   },
 );
 
-/**
- * Async thunk for fetching score factors
- */
-export const fetchScoreFactors = createAsyncThunk(
-  "credit/fetchFactors",
-  async (address: string, { rejectWithValue }) => {
-    try {
-      const factors = await creditService.getScoreFactors(address);
-      return factors;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
-    }
-  },
-);
-
-/**
- * Async thunk for calculating credit score
- */
-export const calculateScore = createAsyncThunk(
-  "credit/calculate",
-  async (walletAddress: string, { rejectWithValue }) => {
-    try {
-      const result = await creditService.calculateCreditScore(walletAddress);
-      return result;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
-    }
-  },
-);
-
-/**
- * Credit slice
- */
 const creditSlice = createSlice({
   name: "credit",
   initialState,
@@ -98,23 +101,44 @@ const creditSlice = createSlice({
       state.history = null;
       state.scoreFactors = [];
       state.error = null;
+      state.needsWallet = false;
     },
   },
   extraReducers: (builder) => {
-    // Fetch credit score
-    builder.addCase(fetchCreditScore.pending, (state) => {
+    const handlePending = (state: CreditState) => {
       state.isLoading = true;
       state.error = null;
-    });
+      state.needsWallet = false;
+    };
+    const handleRejected = (state: CreditState, action: any) => {
+      state.isLoading = false;
+      const message = action.payload as string;
+      if (isWalletRequiredError(message)) {
+        state.needsWallet = true;
+      } else {
+        state.error = message;
+      }
+    };
+
+    // Fetch credit score
+    builder.addCase(fetchCreditScore.pending, handlePending);
     builder.addCase(fetchCreditScore.fulfilled, (state, action) => {
       state.isLoading = false;
-      state.score = action.payload;
+      state.score = action.payload.score;
+      state.scoreFactors = action.payload.factors;
       state.error = null;
     });
-    builder.addCase(fetchCreditScore.rejected, (state, action) => {
+    builder.addCase(fetchCreditScore.rejected, handleRejected);
+
+    // Calculate score
+    builder.addCase(calculateScore.pending, handlePending);
+    builder.addCase(calculateScore.fulfilled, (state, action) => {
       state.isLoading = false;
-      state.error = action.payload as string;
+      state.score = action.payload.score;
+      state.scoreFactors = action.payload.factors;
+      state.error = null;
     });
+    builder.addCase(calculateScore.rejected, handleRejected);
 
     // Fetch credit history
     builder.addCase(fetchCreditHistory.pending, (state) => {
@@ -127,41 +151,6 @@ const creditSlice = createSlice({
       state.error = null;
     });
     builder.addCase(fetchCreditHistory.rejected, (state, action) => {
-      state.isLoading = false;
-      state.error = action.payload as string;
-    });
-
-    // Fetch score factors
-    builder.addCase(fetchScoreFactors.pending, (state) => {
-      state.isLoading = true;
-      state.error = null;
-    });
-    builder.addCase(fetchScoreFactors.fulfilled, (state, action) => {
-      state.isLoading = false;
-      state.scoreFactors = action.payload;
-      state.error = null;
-    });
-    builder.addCase(fetchScoreFactors.rejected, (state, action) => {
-      state.isLoading = false;
-      state.error = action.payload as string;
-    });
-
-    // Calculate score
-    builder.addCase(calculateScore.pending, (state) => {
-      state.isLoading = true;
-      state.error = null;
-    });
-    builder.addCase(calculateScore.fulfilled, (state, action) => {
-      state.isLoading = false;
-      if (action.payload.calculatedScore !== undefined) {
-        state.score = {
-          score: action.payload.calculatedScore,
-          address: action.payload.address,
-        };
-      }
-      state.error = null;
-    });
-    builder.addCase(calculateScore.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
     });

@@ -490,7 +490,7 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
             "loan_funded",
             5, // Positive impact for getting funded
             keccak256(abi.encodePacked(loanId, "funded")),
-            '{"event":"loan_funded","compliant":true}',
+            "{'event':'loan_funded','compliant':true}",
             "" // Signature would be generated off-chain
         );
 
@@ -555,7 +555,7 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
                 "loan_repaid",
                 10, // Strong positive impact
                 keccak256(abi.encodePacked(loanId, "repaid")),
-                '{"event":"loan_repaid","on_time":true}',
+                "{'event':'loan_repaid','on_time':true}",
                 ""
             );
         } else {
@@ -570,7 +570,7 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
                 keccak256(
                     abi.encodePacked(loanId, "payment", loan.paymentCount)
                 ),
-                '{"event":"loan_payment"}',
+                "{'event':'loan_payment'}",
                 ""
             );
         }
@@ -641,9 +641,9 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
             keccak256(abi.encodePacked(loanId, "default")),
             string(
                 abi.encodePacked(
-                    '{"event":"loan_default","reason":"',
+                    "{'event':'loan_default','reason':'",
                     reason,
-                    '"}'
+                    "'}"
                 )
             ),
             ""

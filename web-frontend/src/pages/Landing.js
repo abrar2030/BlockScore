@@ -14,10 +14,13 @@ import {
 } from "@mui/material";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import LandingNavbar from "../components/navigation/LandingNavbar";
+import { useAuth } from "../contexts/AuthContext";
 
 const Landing = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -50,13 +53,14 @@ const Landing = () => {
       <Box
         sx={{
           background: "linear-gradient(135deg, #3f51b5 0%, #5c6bc0 100%)",
-          pt: { xs: 10, md: 15 },
+          pt: { xs: 14, md: 18 },
           pb: { xs: 12, md: 18 },
           color: "white",
           position: "relative",
           overflow: "hidden",
         }}
       >
+        <LandingNavbar />
         {/* Background decoration */}
         <Box
           sx={{
@@ -125,7 +129,9 @@ const Landing = () => {
                     size="large"
                     color="secondary"
                     endIcon={<ArrowForwardIcon />}
-                    onClick={() => navigate("/dashboard")}
+                    onClick={() =>
+                      navigate(isAuthenticated ? "/dashboard" : "/signup")
+                    }
                     sx={{
                       py: 1.5,
                       px: 4,
@@ -133,7 +139,7 @@ const Landing = () => {
                       boxShadow: "0 8px 16px rgba(245, 0, 87, 0.24)",
                     }}
                   >
-                    Get Started
+                    {isAuthenticated ? "Go to Dashboard" : "Get Started"}
                   </Button>
                 </motion.div>
               </Grid>
@@ -303,14 +309,18 @@ const Landing = () => {
                 <Button
                   variant="contained"
                   size="large"
-                  onClick={() => navigate("/dashboard")}
+                  onClick={() =>
+                    navigate(isAuthenticated ? "/dashboard" : "/signup")
+                  }
                   sx={{
                     py: 1.5,
                     px: 4,
                     borderRadius: 2,
                   }}
                 >
-                  Check Your Score Now
+                  {isAuthenticated
+                    ? "Go to Your Dashboard"
+                    : "Check Your Score Now"}
                 </Button>
               </CardContent>
             </Card>
@@ -328,14 +338,17 @@ const Landing = () => {
         }}
       >
         <Container maxWidth="lg">
-          <Typography variant="body2" color="text.secondary" align="center">
+          <Typography
+            variant="body2"
+            align="center"
+            sx={{ color: "text.primary", fontWeight: 500 }}
+          >
             © {new Date().getFullYear()} BlockScore | All rights reserved
           </Typography>
           <Typography
             variant="body2"
-            color="text.secondary"
             align="center"
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, color: "grey.700" }}
           >
             Powered by blockchain technology for secure and transparent credit
             scoring
