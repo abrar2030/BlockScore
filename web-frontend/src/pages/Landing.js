@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import HeroIllustration from "../components/common/HeroIllustration";
 import LandingNavbar from "../components/navigation/LandingNavbar";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -151,16 +152,17 @@ const Landing = () => {
                   transition={{ duration: 0.8, delay: 0.3 }}
                 >
                   <Box
-                    component="img"
-                    src="/hero-image.svg"
-                    alt="BlockScore Hero"
                     sx={{
                       width: "100%",
                       maxWidth: 500,
                       display: "block",
                       mx: "auto",
                     }}
-                  />
+                  >
+                    <HeroIllustration
+                      style={{ width: "100%", height: "auto" }}
+                    />
+                  </Box>
                 </motion.div>
               </Grid>
             </Grid>

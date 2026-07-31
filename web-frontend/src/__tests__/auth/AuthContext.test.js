@@ -1,21 +1,20 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { AuthProvider, useAuth } from "../../contexts/AuthContext";
-
-// The API module wraps axios; mock it directly so we control success/failure
-// without depending on a real backend.
-jest.mock("../../utils/api", () => ({
-  fetchCurrentUser: jest.fn(),
-  loginUser: jest.fn(),
-  logoutUser: jest.fn(),
-  registerUser: jest.fn(),
-}));
-
-const {
+import {
   fetchCurrentUser,
   loginUser,
   logoutUser,
   registerUser,
-} = require("../../utils/api");
+} from "../../utils/api";
+
+// The API module wraps axios; mock it directly so we control success/failure
+// without depending on a real backend.
+vi.mock("../../utils/api", () => ({
+  fetchCurrentUser: vi.fn(),
+  loginUser: vi.fn(),
+  logoutUser: vi.fn(),
+  registerUser: vi.fn(),
+}));
 
 let auth;
 const Probe = () => {
@@ -25,7 +24,7 @@ const Probe = () => {
 
 describe("AuthContext", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     window.localStorage.clear();
   });
 

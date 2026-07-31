@@ -77,6 +77,8 @@ const TransactionHistory = ({ history = [] }) => {
                   sx={{ py: 1.5 }}
                 >
                   <ListItemText
+                    primaryTypographyProps={{ component: "div" }}
+                    secondaryTypographyProps={{ component: "div" }}
                     primary={
                       <Box
                         sx={{

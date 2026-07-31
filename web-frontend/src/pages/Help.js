@@ -84,8 +84,8 @@ const Help = () => {
           Still need help?
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Reach out to our support team from your Profile page and we'll get
-          back to you as soon as possible.
+          Reach out to our support team from your Profile page and we&rsquo;ll
+          get back to you as soon as possible.
         </Typography>
       </Paper>
     </motion.div>

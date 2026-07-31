@@ -1,23 +1,25 @@
 import { Box } from "@mui/material";
 import { AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 // Components
 import LoadingScreen from "./components/common/LoadingScreen";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 // Layouts
 import MainLayout from "./layouts/MainLayout";
-// Pages
-import CreditHistory from "./pages/CreditHistory";
-import Dashboard from "./pages/Dashboard";
-import ForgotPassword from "./pages/auth/ForgotPassword";
-import Help from "./pages/Help";
+// Landing is the default route, so it stays eagerly bundled for the
+// fastest first paint. Everything else loads on demand.
 import Landing from "./pages/Landing";
-import LoanCalculator from "./pages/LoanCalculator";
-import NotFound from "./pages/NotFound";
-import Profile from "./pages/Profile";
-import SignIn from "./pages/auth/SignIn";
-import SignUp from "./pages/auth/SignUp";
+
+const SignIn = lazy(() => import("./pages/auth/SignIn"));
+const SignUp = lazy(() => import("./pages/auth/SignUp"));
+const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const LoanCalculator = lazy(() => import("./pages/LoanCalculator"));
+const Profile = lazy(() => import("./pages/Profile"));
+const CreditHistory = lazy(() => import("./pages/CreditHistory"));
+const Help = lazy(() => import("./pages/Help"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const Protected = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>;
 
@@ -41,59 +43,61 @@ function App() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          {/* Public pages */}
-          <Route path="/" element={<Landing />} />
-          <Route path="/signin" element={<SignIn />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Suspense fallback={<LoadingScreen />}>
+          <Routes location={location} key={location.pathname}>
+            {/* Public pages */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
-          {/* Authenticated application area (with sidebar) */}
-          <Route element={<MainLayout />}>
-            <Route
-              path="/dashboard"
-              element={
-                <Protected>
-                  <Dashboard />
-                </Protected>
-              }
-            />
-            <Route
-              path="/loan-calculator"
-              element={
-                <Protected>
-                  <LoanCalculator />
-                </Protected>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <Protected>
-                  <Profile />
-                </Protected>
-              }
-            />
-            <Route
-              path="/history"
-              element={
-                <Protected>
-                  <CreditHistory />
-                </Protected>
-              }
-            />
-            <Route
-              path="/help"
-              element={
-                <Protected>
-                  <Help />
-                </Protected>
-              }
-            />
-          </Route>
+            {/* Authenticated application area (with sidebar) */}
+            <Route element={<MainLayout />}>
+              <Route
+                path="/dashboard"
+                element={
+                  <Protected>
+                    <Dashboard />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/loan-calculator"
+                element={
+                  <Protected>
+                    <LoanCalculator />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <Protected>
+                    <Profile />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/history"
+                element={
+                  <Protected>
+                    <CreditHistory />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/help"
+                element={
+                  <Protected>
+                    <Help />
+                  </Protected>
+                }
+              />
+            </Route>
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </AnimatePresence>
     </Box>
   );

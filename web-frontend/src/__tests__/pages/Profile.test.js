@@ -1,31 +1,30 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import Profile from "../../pages/Profile";
+import {
+  fetchCurrentUser,
+  getLoanApplications,
+  updateProfile,
+} from "../../utils/api";
 
-jest.mock("../../utils/api", () => ({
-  fetchCurrentUser: jest.fn(),
-  getLoanApplications: jest.fn(),
-  updateProfile: jest.fn(),
+vi.mock("../../utils/api", () => ({
+  fetchCurrentUser: vi.fn(),
+  getLoanApplications: vi.fn(),
+  updateProfile: vi.fn(),
 }));
 
-jest.mock("../../contexts/AuthContext", () => ({
+vi.mock("../../contexts/AuthContext", () => ({
   useAuth: () => ({
     user: { email: "ada@blockscore.io" },
-    logout: jest.fn(),
+    logout: vi.fn(),
   }),
 }));
 
-jest.mock("../../contexts/CreditContext", () => ({
+vi.mock("../../contexts/CreditContext", () => ({
   useCredit: () => ({
     creditData: { score: 720, score_grade: "Good" },
     needsWallet: false,
   }),
 }));
-
-const {
-  fetchCurrentUser,
-  getLoanApplications,
-  updateProfile,
-} = require("../../utils/api");
 
 const baseProfile = {
   id: "u1",
@@ -53,7 +52,7 @@ const baseProfile = {
 
 describe("Profile page", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     fetchCurrentUser.mockResolvedValue(baseProfile);
     getLoanApplications.mockResolvedValue({ applications: [] });
   });

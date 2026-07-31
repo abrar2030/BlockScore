@@ -1,27 +1,26 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { CreditProvider, useCredit } from "../../contexts/CreditContext";
-
-jest.mock("../../utils/api", () => ({
-  calculateCreditScore: jest.fn(),
-  getCreditHistory: jest.fn(),
-  getCreditScore: jest.fn(),
-}));
-
-const mockUseAuth = jest.fn();
-jest.mock("../../contexts/AuthContext", () => ({
-  useAuth: () => mockUseAuth(),
-}));
-
-const mockUseWeb3 = jest.fn();
-jest.mock("../../contexts/Web3Context", () => ({
-  useWeb3: () => mockUseWeb3(),
-}));
-
-const {
+import {
   calculateCreditScore,
   getCreditHistory,
   getCreditScore,
-} = require("../../utils/api");
+} from "../../utils/api";
+
+vi.mock("../../utils/api", () => ({
+  calculateCreditScore: vi.fn(),
+  getCreditHistory: vi.fn(),
+  getCreditScore: vi.fn(),
+}));
+
+const mockUseAuth = vi.fn();
+vi.mock("../../contexts/AuthContext", () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
+const mockUseWeb3 = vi.fn();
+vi.mock("../../contexts/Web3Context", () => ({
+  useWeb3: () => mockUseWeb3(),
+}));
 
 let credit;
 const Probe = () => {
@@ -38,7 +37,7 @@ const renderProvider = () =>
 
 describe("CreditContext", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockUseAuth.mockReturnValue({ isAuthenticated: true });
     mockUseWeb3.mockReturnValue({ accounts: [] });
   });

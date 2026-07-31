@@ -1,23 +1,22 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import LoanCalculator from "../../pages/LoanCalculator";
+import { applyForLoan, calculateLoan } from "../../utils/api";
 
-jest.mock("../../utils/api", () => ({
-  applyForLoan: jest.fn(),
-  calculateLoan: jest.fn(),
+vi.mock("../../utils/api", () => ({
+  applyForLoan: vi.fn(),
+  calculateLoan: vi.fn(),
 }));
 
 // Chart.js requires a real canvas context, which jsdom does not implement.
 // The charts are purely presentational here, so a lightweight stand-in keeps
 // these tests focused on the data flow (API calls, field names, UI state).
-jest.mock("react-chartjs-2", () => ({
+vi.mock("react-chartjs-2", () => ({
   Doughnut: () => <div data-testid="doughnut-chart" />,
   Line: () => <div data-testid="line-chart" />,
 }));
 
-const { applyForLoan, calculateLoan } = require("../../utils/api");
-
 describe("LoanCalculator page", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it("calls calculateLoan with the correct field names (amount, rate, term_months)", async () => {
     calculateLoan.mockResolvedValueOnce({

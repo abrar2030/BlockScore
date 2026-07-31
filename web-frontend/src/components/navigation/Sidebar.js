@@ -10,13 +10,12 @@ import {
   Drawer,
   List,
   ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Typography,
-  useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const drawerWidth = 240;
@@ -25,19 +24,6 @@ const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const _isDesktop = useMediaQuery(theme.breakpoints.up("sm"));
-
-  const [open, setOpen] = useState({
-    transactions: false,
-    settings: false,
-  });
-
-  const _handleClick = (section) => {
-    setOpen({
-      ...open,
-      [section]: !open[section],
-    });
-  };
 
   const menuItems = [
     {
@@ -92,56 +78,60 @@ const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
       <List sx={{ pt: 2 }}>
         {menuItems.map((item) => (
           <ListItem
-            button
             key={item.text}
-            onClick={() => navigate(item.path)}
-            sx={{
-              mb: 0.5,
-              py: 1,
-              borderRadius: "8px",
-              mx: 1,
-              "&:hover": {
-                backgroundColor: "rgba(63, 81, 181, 0.08)",
-              },
-              ...(location.pathname === item.path && {
-                backgroundColor: "rgba(63, 81, 181, 0.12)",
-                "&:hover": {
-                  backgroundColor: "rgba(63, 81, 181, 0.16)",
-                },
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  left: 0,
-                  top: "25%",
-                  height: "50%",
-                  width: 4,
-                  backgroundColor: theme.palette.primary.main,
-                  borderRadius: "0 4px 4px 0",
-                },
-              }),
-            }}
+            disablePadding
+            sx={{ mb: 0.5, mx: 1, width: "auto" }}
           >
-            <ListItemIcon
+            <ListItemButton
+              onClick={() => navigate(item.path)}
+              selected={location.pathname === item.path}
               sx={{
-                minWidth: 40,
-                color:
-                  location.pathname === item.path
-                    ? theme.palette.primary.main
-                    : theme.palette.text.secondary,
+                py: 1,
+                borderRadius: "8px",
+                position: "relative",
+                "&:hover": {
+                  backgroundColor: "rgba(63, 81, 181, 0.08)",
+                },
+                "&.Mui-selected": {
+                  backgroundColor: "rgba(63, 81, 181, 0.12)",
+                  "&:hover": {
+                    backgroundColor: "rgba(63, 81, 181, 0.16)",
+                  },
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    left: 0,
+                    top: "25%",
+                    height: "50%",
+                    width: 4,
+                    backgroundColor: theme.palette.primary.main,
+                    borderRadius: "0 4px 4px 0",
+                  },
+                },
               }}
             >
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText
-              primary={item.text}
-              primaryTypographyProps={{
-                fontWeight: location.pathname === item.path ? 500 : 400,
-                color:
-                  location.pathname === item.path
-                    ? theme.palette.primary.main
-                    : theme.palette.text.primary,
-              }}
-            />
+              <ListItemIcon
+                sx={{
+                  minWidth: 40,
+                  color:
+                    location.pathname === item.path
+                      ? theme.palette.primary.main
+                      : theme.palette.text.secondary,
+                }}
+              >
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.text}
+                primaryTypographyProps={{
+                  fontWeight: location.pathname === item.path ? 500 : 400,
+                  color:
+                    location.pathname === item.path
+                      ? theme.palette.primary.main
+                      : theme.palette.text.primary,
+                }}
+              />
+            </ListItemButton>
           </ListItem>
         ))}
       </List>

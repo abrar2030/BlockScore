@@ -12,19 +12,19 @@ const mockAuth = {
   user: { address: "0x123", name: "Test User", email: "test@blockscore.io" },
   isAuthenticated: true,
   loading: false,
-  signIn: jest.fn(),
-  signUp: jest.fn(),
-  signOut: jest.fn(),
-  login: jest.fn(),
-  logout: jest.fn(),
+  signIn: vi.fn(),
+  signUp: vi.fn(),
+  signOut: vi.fn(),
+  login: vi.fn(),
+  logout: vi.fn(),
 };
 
-jest.mock("./contexts/AuthContext", () => ({
+vi.mock("./contexts/AuthContext", () => ({
   AuthProvider: ({ children }) => <div>{children}</div>,
   useAuth: () => mockAuth,
 }));
 
-jest.mock("./contexts/Web3Context", () => ({
+vi.mock("./contexts/Web3Context", () => ({
   Web3Provider: ({ children }) => <div>{children}</div>,
   useWeb3: () => ({
     web3: {},
@@ -34,7 +34,7 @@ jest.mock("./contexts/Web3Context", () => ({
   }),
 }));
 
-jest.mock("./contexts/CreditContext", () => ({
+vi.mock("./contexts/CreditContext", () => ({
   CreditProvider: ({ children }) => <div>{children}</div>,
   useCredit: () => ({
     creditData: { score: 720 },

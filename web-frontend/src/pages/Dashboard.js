@@ -10,7 +10,6 @@ import {
   Divider,
   Grid,
   Typography,
-  useTheme,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -32,7 +31,6 @@ const gradeColor = {
 };
 
 const Dashboard = () => {
-  const _theme = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
   const {
@@ -82,7 +80,7 @@ const Dashboard = () => {
           Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Welcome back{user?.email ? `, ${user.email}` : ""}! Here's your
+          Welcome back{user?.email ? `, ${user.email}` : ""}! Here&rsquo;s your
           current credit status and history.
         </Typography>
       </Box>

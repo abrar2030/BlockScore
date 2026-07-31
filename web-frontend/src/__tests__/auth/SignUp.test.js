@@ -4,8 +4,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import SignUp from "../../pages/auth/SignUp";
 import theme from "../../theme";
 
-const mockSignUp = jest.fn();
-jest.mock("../../contexts/AuthContext", () => ({
+const mockSignUp = vi.fn();
+vi.mock("../../contexts/AuthContext", () => ({
   useAuth: () => ({ signUp: mockSignUp }),
 }));
 
@@ -34,7 +34,7 @@ const fillCoreFields = (password = "Str0ngpass", confirm = "Str0ngpass") => {
 };
 
 describe("SignUp page", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it("rejects a password shorter than 8 characters", () => {
     renderSignUp();

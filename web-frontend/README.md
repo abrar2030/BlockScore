@@ -42,13 +42,13 @@ The BlockScore web frontend provides an intuitive interface for users to:
 - **Framework**: React 18.2.0
 - **UI Library**: Material-UI (MUI) 5.12.1
 - **State Management**: React Context API
-- **Routing**: React Router v6
+- **Routing**: React Router v7
 - **Web3**: Web3.js 4.16.0, ethers.js (planned)
 - **Charts**: Chart.js 4.2.1, D3.js 7.8.4
 - **Animations**: Framer Motion 10.12.4
 - **HTTP Client**: Axios 1.3.6
-- **Testing**: Jest, React Testing Library
-- **Build Tool**: React Scripts (Create React App)
+- **Testing**: Vitest, React Testing Library
+- **Build Tool**: Vite
 
 ## Prerequisites
 
@@ -257,27 +257,30 @@ web-frontend/
 ├── .env.example           # Environment variables template
 ├── package.json           # Dependencies and scripts
 ├── jest.config.js         # Jest configuration
-├── webpack.config.js      # Webpack configuration (if needed)
 └── README.md              # This file
 ```
 
 ## Available Scripts
 
-### `npm start`
+### `npm start` (alias: `npm run dev`)
 
-Runs the app in development mode on `http://localhost:3000`.
+Runs the app in development mode on `http://localhost:3000`, with fast HMR via Vite.
 
 ### `npm test`
 
-Launches the test runner in interactive watch mode.
+Runs the test suite once (Vitest). Use `npm run test:watch` for interactive watch mode.
 
 ### `npm run build`
 
-Builds the app for production to the `build` folder.
+Builds the app for production to the `build` folder, with route-based code splitting.
 
-### `npm run eject`
+### `npm run preview`
 
-**Warning**: This is a one-way operation. Ejects from Create React App configuration.
+Serves the production build locally, for a final check before deploying.
+
+### `npm run lint`
+
+Runs ESLint over the project.
 
 ## Troubleshooting
 

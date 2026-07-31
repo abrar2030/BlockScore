@@ -68,6 +68,7 @@ const LandingNavbar = () => {
           {isAuthenticated ? (
             <Button
               variant="contained"
+              color="inherit"
               sx={{
                 bgcolor: "white",
                 color: "primary.main",
@@ -95,9 +96,11 @@ const LandingNavbar = () => {
               </Button>
               <Button
                 variant="contained"
+                color="inherit"
                 sx={{
                   bgcolor: "white",
                   color: "primary.main",
+                  fontWeight: 600,
                   "&:hover": { bgcolor: "rgba(255,255,255,0.9)" },
                 }}
                 onClick={() => navigate("/signup")}

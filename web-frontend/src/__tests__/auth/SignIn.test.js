@@ -4,8 +4,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import SignIn from "../../pages/auth/SignIn";
 import theme from "../../theme";
 
-const mockSignIn = jest.fn();
-jest.mock("../../contexts/AuthContext", () => ({
+const mockSignIn = vi.fn();
+vi.mock("../../contexts/AuthContext", () => ({
   useAuth: () => ({ signIn: mockSignIn }),
 }));
 
@@ -23,7 +23,7 @@ const renderSignIn = () =>
   );
 
 describe("SignIn page", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it("shows a validation error when fields are empty", () => {
     renderSignIn();

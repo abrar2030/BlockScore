@@ -1,4 +1,4 @@
-// jest-dom adds custom jest matchers for asserting on DOM nodes, such as
-// toBeInTheDocument() and toHaveStyle(). This file is auto-loaded by
-// react-scripts before every test file runs.
-import "@testing-library/jest-dom";
+// jest-dom adds custom matchers for asserting on DOM nodes, such as
+// toBeInTheDocument() and toHaveStyle(). Loaded before every test file
+// via vite.config.js's test.setupFiles.
+import "@testing-library/jest-dom/vitest";
