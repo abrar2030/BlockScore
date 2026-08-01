@@ -112,7 +112,7 @@ const SignIn = () => {
             type="submit"
             variant="contained"
             size="large"
-            color="secondary"
+            color="primary"
             endIcon={<ArrowForwardIcon />}
             disabled={submitting}
             sx={{ py: 1.5 }}
@@ -121,8 +121,11 @@ const SignIn = () => {
           </Button>
 
           <Divider>
-            <Typography variant="caption" color="text.secondary">
-              NEW TO BLOCKSCORE
+            <Typography
+              variant="caption"
+              sx={{ color: "text.secondary", letterSpacing: 0.6 }}
+            >
+              New to BlockScore
             </Typography>
           </Divider>
 

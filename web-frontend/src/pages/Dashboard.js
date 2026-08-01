@@ -1,10 +1,9 @@
-import RefreshIcon from "@mui/icons-material/Refresh";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import {
   Alert,
   Box,
   Button,
   Card,
-  CardContent,
   Chip,
   CircularProgress,
   Divider,
@@ -15,7 +14,6 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CreditFactors from "../components/dashboard/CreditFactors";
-// Components
 import CreditScoreGauge from "../components/dashboard/CreditScoreGauge";
 import QuickActions from "../components/dashboard/QuickActions";
 import TransactionHistory from "../components/dashboard/TransactionHistory";
@@ -73,15 +71,24 @@ const Dashboard = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
     >
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
+        <Typography
+          variant="overline"
+          sx={{ color: "text.secondary", fontWeight: 700, letterSpacing: 1.4 }}
+        >
           Dashboard
         </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome back{user?.email ? `, ${user.email}` : ""}! Here&rsquo;s your
-          current credit status and history.
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, mt: 0.5 }}
+        >
+          Welcome back{user?.email ? `, ${user.email}` : ""}
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+          Here&rsquo;s your current credit status and history.
         </Typography>
       </Box>
 
@@ -113,24 +120,50 @@ const Dashboard = () => {
         {/* Credit Score Card */}
         <Grid item xs={12} md={6} lg={4}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
+            initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
+            style={{ height: "100%" }}
           >
-            <Card sx={{ height: "100%" }}>
-              <CardContent
+            <Card sx={{ height: "100%", overflow: "hidden" }}>
+              <Box
                 sx={{
+                  px: 3,
+                  py: 2,
+                  backgroundColor: "#0D1220",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Typography sx={{ color: "white", fontWeight: 600 }}>
+                  Your Credit Score
+                </Typography>
+                <Chip
+                  size="small"
+                  label={creditData?.score_grade || "Not available"}
+                  color={gradeColor[creditData?.score_grade] || "default"}
+                  sx={{
+                    fontWeight: 600,
+                    ...(gradeColor[creditData?.score_grade]
+                      ? {}
+                      : {
+                          bgcolor: "rgba(255,255,255,0.12)",
+                          color: "rgba(255,255,255,0.8)",
+                        }),
+                  }}
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  p: 3,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  p: 3,
                 }}
               >
-                <Typography variant="h6" gutterBottom>
-                  Your Credit Score
-                </Typography>
-
-                <Box sx={{ my: 2, width: "100%", maxWidth: 250 }}>
+                <Box sx={{ my: 1, width: "100%", maxWidth: 260 }}>
                   <CreditScoreGauge score={creditData?.score || 0} />
                 </Box>
 
@@ -140,35 +173,22 @@ const Dashboard = () => {
                   align="center"
                 >
                   {creditData?.calculated_at
-                    ? `Last updated: ${new Date(
-                        creditData.calculated_at,
-                      ).toLocaleDateString()}`
+                    ? `Last updated ${new Date(creditData.calculated_at).toLocaleDateString()}`
                     : "Not calculated yet"}
                 </Typography>
 
-                <Divider sx={{ width: "100%", my: 2 }} />
+                <Divider sx={{ width: "100%", my: 2.5 }} />
 
-                <Box sx={{ width: "100%", textAlign: "center" }}>
-                  <Typography variant="body2" gutterBottom>
-                    Score Category:
-                  </Typography>
-                  <Chip
-                    label={creditData?.score_grade || "Not available"}
-                    color={gradeColor[creditData?.score_grade] || "default"}
-                    sx={{ fontWeight: 500, mb: 2 }}
-                  />
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    startIcon={<RefreshIcon />}
-                    onClick={handleRecalculate}
-                    disabled={recalculating}
-                  >
-                    {recalculating ? "Recalculating..." : "Recalculate Score"}
-                  </Button>
-                </Box>
-              </CardContent>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<RefreshRoundedIcon />}
+                  onClick={handleRecalculate}
+                  disabled={recalculating}
+                >
+                  {recalculating ? "Recalculating…" : "Recalculate score"}
+                </Button>
+              </Box>
             </Card>
           </motion.div>
         </Grid>
@@ -176,9 +196,10 @@ const Dashboard = () => {
         {/* Credit Factors */}
         <Grid item xs={12} md={6} lg={4}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
+            initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            style={{ height: "100%" }}
           >
             <CreditFactors scoreBreakdown={creditData?.score_breakdown} />
           </motion.div>
@@ -187,18 +208,16 @@ const Dashboard = () => {
         {/* Quick Actions */}
         <Grid item xs={12} md={6} lg={4}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
+            initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            style={{ height: "100%" }}
           >
-            <Card sx={{ height: "100%" }}>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Quick Actions
-                </Typography>
-
-                <QuickActions />
-              </CardContent>
+            <Card sx={{ height: "100%", p: 3 }}>
+              <Typography sx={{ fontWeight: 600, mb: 2 }}>
+                Quick actions
+              </Typography>
+              <QuickActions />
             </Card>
           </motion.div>
         </Grid>
@@ -206,9 +225,9 @@ const Dashboard = () => {
         {/* Credit History */}
         <Grid item xs={12}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
+            initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
           >
             <TransactionHistory history={history} />
           </motion.div>

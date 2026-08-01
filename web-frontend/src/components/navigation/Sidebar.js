@@ -1,149 +1,148 @@
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import CalculateIcon from "@mui/icons-material/Calculate";
-// Icons
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import HelpIcon from "@mui/icons-material/Help";
-import HistoryIcon from "@mui/icons-material/History";
-import {
-  Box,
-  Divider,
-  Drawer,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Typography,
-  useTheme,
-} from "@mui/material";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
+import CalculateIcon from "@mui/icons-material/CalculateOutlined";
+import DashboardIcon from "@mui/icons-material/GridViewRounded";
+import HelpIcon from "@mui/icons-material/HelpOutlineRounded";
+import HistoryIcon from "@mui/icons-material/HistoryRounded";
+import { Box, Drawer, Stack, Typography } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
 
-const drawerWidth = 240;
+const drawerWidth = 248;
 
-const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
-  const theme = useTheme();
+const menuItems = [
+  { text: "Dashboard", icon: DashboardIcon, path: "/dashboard" },
+  { text: "Loan Calculator", icon: CalculateIcon, path: "/loan-calculator" },
+  { text: "Profile", icon: AccountBalanceWalletIcon, path: "/profile" },
+  { text: "Credit History", icon: HistoryIcon, path: "/history" },
+  { text: "Help & Support", icon: HelpIcon, path: "/help" },
+];
+
+// The block-mark: a rounded square housing a short calibrated arc, the same
+// gesture as the score dial elsewhere in the product. Used everywhere the
+// wordmark appears so the brand always points back to "a score you can read".
+const BlockMark = ({ size = 30 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 32 32"
+    fill="none"
+    role="img"
+    aria-label="BlockScore"
+  >
+    <rect width="32" height="32" rx="9" fill="#14B8A6" />
+    <path
+      d="M9 20.5 A 9 9 0 1 1 23 20.5"
+      stroke="#0D1220"
+      strokeWidth="3"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <circle cx="21.6" cy="12.2" r="1.9" fill="#0D1220" />
+  </svg>
+);
+
+const NavList = ({ onNavigate }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const menuItems = [
-    {
-      text: "Dashboard",
-      icon: <DashboardIcon />,
-      path: "/dashboard",
-    },
-    {
-      text: "Loan Calculator",
-      icon: <CalculateIcon />,
-      path: "/loan-calculator",
-    },
-    {
-      text: "Profile",
-      icon: <AccountBalanceWalletIcon />,
-      path: "/profile",
-    },
-    {
-      text: "Credit History",
-      icon: <HistoryIcon />,
-      path: "/history",
-    },
-    {
-      text: "Help & Support",
-      icon: <HelpIcon />,
-      path: "/help",
-    },
-  ];
-
-  const drawer = (
-    <div>
+  return (
+    <Stack sx={{ height: "100%" }}>
       <Box
         sx={{
-          height: 64,
+          height: 68,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
-          borderBottom: `1px solid ${theme.palette.divider}`,
+          gap: 1.25,
+          px: 2.5,
         }}
       >
+        <BlockMark />
         <Typography
-          variant="h6"
           sx={{
-            fontFamily: '"Poppins", sans-serif',
+            fontFamily: '"Space Grotesk", sans-serif',
             fontWeight: 600,
-            color: theme.palette.primary.main,
+            fontSize: "1.05rem",
+            color: "#ffffff",
           }}
         >
           BlockScore
         </Typography>
       </Box>
-      <List sx={{ pt: 2 }}>
-        {menuItems.map((item) => (
-          <ListItem
-            key={item.text}
-            disablePadding
-            sx={{ mb: 0.5, mx: 1, width: "auto" }}
-          >
-            <ListItemButton
-              onClick={() => navigate(item.path)}
-              selected={location.pathname === item.path}
+
+      <Stack component="nav" spacing={0.5} sx={{ px: 1.5, pt: 1, flexGrow: 1 }}>
+        {menuItems.map((item) => {
+          const selected = location.pathname === item.path;
+          const Icon = item.icon;
+          return (
+            <Box
+              key={item.text}
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                navigate(item.path);
+                onNavigate?.();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  navigate(item.path);
+                  onNavigate?.();
+                }
+              }}
               sx={{
-                py: 1,
-                borderRadius: "8px",
-                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                px: 1.75,
+                py: 1.1,
+                borderRadius: 2,
+                cursor: "pointer",
+                color: selected ? "#ffffff" : "rgba(255,255,255,0.62)",
+                backgroundColor: selected
+                  ? "rgba(20, 184, 166, 0.16)"
+                  : "transparent",
+                transition: "background-color 0.15s ease, color 0.15s ease",
                 "&:hover": {
-                  backgroundColor: "rgba(63, 81, 181, 0.08)",
-                },
-                "&.Mui-selected": {
-                  backgroundColor: "rgba(63, 81, 181, 0.12)",
-                  "&:hover": {
-                    backgroundColor: "rgba(63, 81, 181, 0.16)",
-                  },
-                  "&::before": {
-                    content: '""',
-                    position: "absolute",
-                    left: 0,
-                    top: "25%",
-                    height: "50%",
-                    width: 4,
-                    backgroundColor: theme.palette.primary.main,
-                    borderRadius: "0 4px 4px 0",
-                  },
+                  backgroundColor: selected
+                    ? "rgba(20, 184, 166, 0.2)"
+                    : "rgba(255,255,255,0.06)",
+                  color: "#ffffff",
                 },
               }}
             >
-              <ListItemIcon
-                sx={{
-                  minWidth: 40,
-                  color:
-                    location.pathname === item.path
-                      ? theme.palette.primary.main
-                      : theme.palette.text.secondary,
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.text}
-                primaryTypographyProps={{
-                  fontWeight: location.pathname === item.path ? 500 : 400,
-                  color:
-                    location.pathname === item.path
-                      ? theme.palette.primary.main
-                      : theme.palette.text.primary,
-                }}
+              <Icon
+                fontSize="small"
+                sx={{ color: selected ? "#14B8A6" : "inherit" }}
               />
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
-      <Divider sx={{ my: 2 }} />
-      <Box sx={{ p: 2 }}>
-        <Typography variant="body2" color="text.secondary" align="center">
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: selected ? 600 : 500 }}
+              >
+                {item.text}
+              </Typography>
+            </Box>
+          );
+        })}
+      </Stack>
+
+      <Box sx={{ px: 2.5, py: 2.5 }}>
+        <Typography
+          variant="caption"
+          sx={{ color: "rgba(255,255,255,0.35)", letterSpacing: 0.4 }}
+        >
           BlockScore v1.0.0
         </Typography>
       </Box>
-    </div>
+    </Stack>
   );
+};
 
+const railSx = {
+  boxSizing: "border-box",
+  width: drawerWidth,
+  backgroundColor: "#0D1220",
+  border: "none",
+};
+
+const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
   return (
     <Box
       component="nav"
@@ -154,19 +153,13 @@ const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
         variant="temporary"
         open={mobileOpen}
         onClose={onDrawerToggle}
-        ModalProps={{
-          keepMounted: true, // Better open performance on mobile
-        }}
+        ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: "block", sm: "none" },
-          "& .MuiDrawer-paper": {
-            boxSizing: "border-box",
-            width: drawerWidth,
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
-          },
+          "& .MuiDrawer-paper": railSx,
         }}
       >
-        {drawer}
+        <NavList onNavigate={onDrawerToggle} />
       </Drawer>
 
       {/* Desktop drawer */}
@@ -174,16 +167,11 @@ const Sidebar = ({ mobileOpen, onDrawerToggle }) => {
         variant="permanent"
         sx={{
           display: { xs: "none", sm: "block" },
-          "& .MuiDrawer-paper": {
-            boxSizing: "border-box",
-            width: drawerWidth,
-            borderRight: `1px solid ${theme.palette.divider}`,
-            boxShadow: "none",
-          },
+          "& .MuiDrawer-paper": railSx,
         }}
         open
       >
-        {drawer}
+        <NavList />
       </Drawer>
     </Box>
   );

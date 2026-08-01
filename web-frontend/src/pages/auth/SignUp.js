@@ -193,7 +193,7 @@ const SignUp = () => {
             type="submit"
             variant="contained"
             size="large"
-            color="secondary"
+            color="primary"
             endIcon={<ArrowForwardIcon />}
             disabled={submitting}
             sx={{ py: 1.5 }}

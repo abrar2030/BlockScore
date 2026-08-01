@@ -1,11 +1,4 @@
-import {
-  Box,
-  Card,
-  CardContent,
-  LinearProgress,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { Box, Card, LinearProgress, Tooltip, Typography } from "@mui/material";
 import { motion } from "framer-motion";
 
 // Maps the backend's score_breakdown keys (each 0-100) to display labels and
@@ -69,65 +62,63 @@ const CreditFactors = ({ scoreBreakdown }) => {
 
   if (!factors.length) {
     return (
-      <Card sx={{ borderRadius: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-            Score Factors
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Factor breakdown will appear here once your credit score has been
-            calculated.
-          </Typography>
-        </CardContent>
+      <Card sx={{ height: "100%", p: 3 }}>
+        <Typography sx={{ fontWeight: 600, mb: 1 }}>Score Factors</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Factor breakdown will appear here once your credit score has been
+          calculated.
+        </Typography>
       </Card>
     );
   }
 
   return (
-    <Card sx={{ borderRadius: 3 }}>
-      <CardContent>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          Score Factors
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Each factor is scored from 0 to 100 and contributes to your overall
-          credit score.
-        </Typography>
+    <Card sx={{ height: "100%", p: 3 }}>
+      <Typography sx={{ fontWeight: 600, mb: 0.5 }}>Score Factors</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+        Each factor is scored 0–100 and contributes to your overall score.
+      </Typography>
 
-        {factors.map((factor, index) => (
-          <motion.div
-            key={factor.key}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <Tooltip title={factor.description} arrow placement="top">
-              <Box sx={{ mb: 2.5 }}>
-                <Box
+      {factors.map((factor, index) => (
+        <motion.div
+          key={factor.key}
+          initial={{ opacity: 0, x: -8 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: index * 0.04 }}
+        >
+          <Tooltip title={factor.description} arrow placement="top">
+            <Box sx={{ mb: index === factors.length - 1 ? 0 : 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {factor.label}
+                </Typography>
+                <Typography
+                  variant="body2"
                   sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 0.5,
+                    color: "text.secondary",
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontSize: "0.78rem",
                   }}
                 >
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {factor.label}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {Math.round(factor.value)}/100
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(100, Math.max(0, factor.value))}
-                  color={getColor(factor.value)}
-                  sx={{ height: 8, borderRadius: 4 }}
-                />
+                  {Math.round(factor.value)}/100
+                </Typography>
               </Box>
-            </Tooltip>
-          </motion.div>
-        ))}
-      </CardContent>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, Math.max(0, factor.value))}
+                color={getColor(factor.value)}
+                sx={{ height: 6 }}
+              />
+            </Box>
+          </Tooltip>
+        </motion.div>
+      ))}
     </Card>
   );
 };

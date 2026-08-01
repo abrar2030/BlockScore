@@ -1,8 +1,7 @@
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import LogoutIcon from "@mui/icons-material/Logout";
-import MenuIcon from "@mui/icons-material/Menu";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import PersonIcon from "@mui/icons-material/Person";
+import LogoutIcon from "@mui/icons-material/LogoutRounded";
+import MenuIcon from "@mui/icons-material/MenuRounded";
+import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneRounded";
+import PersonOutlineRoundedIcon from "@mui/icons-material/PersonOutlineRounded";
 import {
   AppBar,
   Avatar,
@@ -15,18 +14,21 @@ import {
   MenuItem,
   Toolbar,
   Typography,
-  useTheme,
 } from "@mui/material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
+// A slim, light top strip above the canvas. Branding already lives in the
+// dark sidebar rail, so this bar's only job is context (mobile menu) and
+// account actions, not a second logo competing for attention.
 const Navbar = ({ onDrawerToggle }) => {
-  const theme = useTheme();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
   const menuOpen = Boolean(anchorEl);
+
+  const initial = (user?.email || "?").charAt(0).toUpperCase();
 
   const handleSignOut = async () => {
     setAnchorEl(null);
@@ -36,110 +38,84 @@ const Navbar = ({ onDrawerToggle }) => {
 
   return (
     <AppBar
-      position="fixed"
+      position="sticky"
+      elevation={0}
       sx={{
-        zIndex: theme.zIndex.drawer + 1,
-        background: "linear-gradient(90deg, #3f51b5 0%, #5c6bc0 100%)",
-        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
+        backgroundColor: "background.default",
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        color: "text.primary",
       }}
     >
-      <Toolbar>
+      <Toolbar sx={{ minHeight: "64px !important", px: { xs: 2, sm: 3 } }}>
         <IconButton
-          color="inherit"
           aria-label="open drawer"
           edge="start"
           onClick={onDrawerToggle}
-          sx={{ mr: 2, display: { sm: "none" } }}
+          sx={{ mr: 1.5, display: { sm: "none" } }}
         >
           <MenuIcon />
         </IconButton>
 
-        <Typography
-          variant="h6"
-          component="div"
-          sx={{
-            flexGrow: 1,
-            fontFamily: '"Poppins", sans-serif',
-            fontWeight: 600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-          }}
-          onClick={() => navigate("/dashboard")}
+        <Box sx={{ flexGrow: 1 }} />
+
+        <IconButton sx={{ color: "text.secondary" }}>
+          <Badge badgeContent={3} color="error">
+            <NotificationsNoneRoundedIcon />
+          </Badge>
+        </IconButton>
+
+        <IconButton
+          sx={{ ml: 1 }}
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          aria-label="account menu"
         >
-          <Box
-            component="span"
+          <Avatar
             sx={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              backgroundColor: "white",
-              color: "primary.main",
-              mr: 1,
-              fontWeight: 700,
-              fontSize: "1.2rem",
+              width: 34,
+              height: 34,
+              bgcolor: "secondary.main",
+              fontSize: "0.9rem",
+              fontWeight: 600,
             }}
           >
-            B
-          </Box>
-          BlockScore
-        </Typography>
+            {initial}
+          </Avatar>
+        </IconButton>
 
-        <Box sx={{ display: "flex" }}>
-          <IconButton color="inherit" sx={{ ml: 1 }}>
-            <Badge badgeContent={3} color="secondary">
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
-
-          <IconButton
-            color="inherit"
-            sx={{ ml: 1 }}
-            onClick={(e) => setAnchorEl(e.currentTarget)}
-            aria-label="account menu"
-          >
-            <Avatar sx={{ width: 32, height: 32, bgcolor: "secondary.main" }}>
-              <AccountCircleIcon />
-            </Avatar>
-          </IconButton>
-
-          <Menu
-            anchorEl={anchorEl}
-            open={menuOpen}
-            onClose={() => setAnchorEl(null)}
-            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-            transformOrigin={{ vertical: "top", horizontal: "right" }}
-          >
-            {user?.email ? (
-              <MenuItem disabled sx={{ opacity: "1 !important" }}>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  {user.email}
-                </Typography>
-              </MenuItem>
-            ) : null}
-            {user?.email ? <Divider /> : null}
-            <MenuItem
-              onClick={() => {
-                setAnchorEl(null);
-                navigate("/profile");
-              }}
-            >
-              <ListItemIcon>
-                <PersonIcon fontSize="small" />
-              </ListItemIcon>
-              Profile
+        <Menu
+          anchorEl={anchorEl}
+          open={menuOpen}
+          onClose={() => setAnchorEl(null)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+        >
+          {user?.email ? (
+            <MenuItem disabled sx={{ opacity: "1 !important" }}>
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {user.email}
+              </Typography>
             </MenuItem>
-            <MenuItem onClick={handleSignOut}>
-              <ListItemIcon>
-                <LogoutIcon fontSize="small" />
-              </ListItemIcon>
-              Sign out
-            </MenuItem>
-          </Menu>
-        </Box>
+          ) : null}
+          {user?.email ? <Divider /> : null}
+          <MenuItem
+            onClick={() => {
+              setAnchorEl(null);
+              navigate("/profile");
+            }}
+          >
+            <ListItemIcon>
+              <PersonOutlineRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            Profile
+          </MenuItem>
+          <MenuItem onClick={handleSignOut}>
+            <ListItemIcon>
+              <LogoutIcon fontSize="small" />
+            </ListItemIcon>
+            Sign out
+          </MenuItem>
+        </Menu>
       </Toolbar>
     </AppBar>
   );

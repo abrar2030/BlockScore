@@ -14,24 +14,28 @@ const LoadingScreen = () => {
       }}
     >
       <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
+        initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.4 }}
       >
-        <CircularProgress size={60} thickness={4} />
+        <CircularProgress
+          size={44}
+          thickness={4}
+          sx={{ color: "primary.main" }}
+        />
       </motion.div>
 
       <motion.div
-        initial={{ y: 20, opacity: 0 }}
+        initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.3, duration: 0.5 }}
+        transition={{ delay: 0.25, duration: 0.4 }}
       >
         <Typography
-          variant="h5"
+          variant="h6"
           sx={{
             mt: 3,
-            fontFamily: '"Poppins", sans-serif',
-            fontWeight: 500,
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontWeight: 600,
           }}
         >
           Loading BlockScore
@@ -41,10 +45,10 @@ const LoadingScreen = () => {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.6, duration: 0.5 }}
+        transition={{ delay: 0.5, duration: 0.4 }}
       >
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Decentralized Credit Scoring System
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          AI-native credit scoring
         </Typography>
       </motion.div>
     </Box>

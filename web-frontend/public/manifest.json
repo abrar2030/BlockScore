@@ -1,6 +1,6 @@
 {
   "short_name": "BlockScore",
-  "name": "BlockScore - Decentralized Credit Scoring",
+  "name": "BlockScore - AI-native Credit Scoring",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +20,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#3f51b5",
-  "background_color": "#f5f5f5"
+  "theme_color": "#0D1220",
+  "background_color": "#F5F6FA"
 }

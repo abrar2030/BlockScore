@@ -7,7 +7,7 @@ import logging
 import traceback
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import compat_stubs  # noqa: F401 - must be first
 
@@ -126,6 +126,21 @@ def create_app(config_name: Any = "default") -> Flask:
             f"[{g.request_id}] {request.method} {request.url} - IP: {request.remote_addr}"
         )
 
+    def _safe_jwt_identity() -> Optional[str]:
+        """Best-effort JWT identity lookup for audit logging.
+
+        get_jwt_identity() raises if the current request's JWT was never
+        successfully verified (missing, malformed, or expired token) - which
+        is expected for anonymous or failed-auth requests, not an error
+        worth logging. Swallowing just that lookup (rather than the whole
+        audit_service.log_api_request(...) call, as before) keeps the audit
+        trail intact for every request, including failed-auth ones.
+        """
+        try:
+            return get_jwt_identity()
+        except Exception:
+            return None
+
     @app.after_request
     def after_request(response: Any) -> Any:
         if hasattr(g, "start_time"):
@@ -143,12 +158,7 @@ def create_app(config_name: Any = "default") -> Flask:
                     response_time_ms=int(response_time),
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
-                    user_id=(
-                        get_jwt_identity()
-                        if hasattr(request, "headers")
-                        and "Authorization" in request.headers
-                        else None
-                    ),
+                    user_id=_safe_jwt_identity(),
                 )
             except Exception as e:
                 app.logger.error(f"Failed to create audit log: {e}")

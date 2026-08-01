@@ -1,12 +1,12 @@
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import {
   Alert,
   Box,
   Button,
+  Card,
   Chip,
   CircularProgress,
   Pagination,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -75,21 +75,31 @@ const CreditHistory = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
     >
       <Button
-        startIcon={<ArrowBackIcon />}
+        startIcon={<ArrowBackRoundedIcon />}
         onClick={() => navigate("/dashboard")}
-        sx={{ mb: 2 }}
+        sx={{ mb: 2, color: "text.secondary" }}
       >
         Back to Dashboard
       </Button>
 
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
+        <Typography
+          variant="overline"
+          sx={{ color: "text.secondary", fontWeight: 700, letterSpacing: 1.4 }}
+        >
+          Ledger
+        </Typography>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, mt: 0.5 }}
+        >
           Credit History
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           A complete record of the events that have affected your credit score.
         </Typography>
       </Box>
@@ -105,14 +115,14 @@ const CreditHistory = () => {
           <CircularProgress />
         </Box>
       ) : events.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: "center", borderRadius: 3 }}>
+        <Card sx={{ p: 4, textAlign: "center" }}>
           <Typography color="text.secondary">
             No credit events recorded yet.
           </Typography>
-        </Paper>
+        </Card>
       ) : (
         <>
-          <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+          <TableContainer component={Card} sx={{ overflow: "hidden" }}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -125,11 +135,13 @@ const CreditHistory = () => {
               </TableHead>
               <TableBody>
                 {events.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell>
+                  <TableRow key={event.id} hover>
+                    <TableCell sx={{ fontWeight: 500 }}>
                       {event.event_title || event.event_type}
                     </TableCell>
-                    <TableCell>{event.event_description || "-"}</TableCell>
+                    <TableCell sx={{ color: "text.secondary" }}>
+                      {event.event_description || "-"}
+                    </TableCell>
                     <TableCell align="right">
                       {typeof event.score_change === "number" &&
                       event.score_change !== 0 ? (
@@ -142,15 +154,22 @@ const CreditHistory = () => {
                           }
                           color={event.score_change > 0 ? "success" : "error"}
                           variant="outlined"
+                          sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
                         />
                       ) : (
                         "-"
                       )}
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontFamily: '"IBM Plex Mono", monospace',
+                        fontSize: "0.82rem",
+                      }}
+                    >
                       {formatAmount(event.amount, event.currency)}
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ color: "text.secondary" }}>
                       {formatDate(event.event_date || event.created_at)}
                     </TableCell>
                   </TableRow>

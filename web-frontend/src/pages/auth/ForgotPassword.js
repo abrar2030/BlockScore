@@ -84,7 +84,7 @@ const ForgotPassword = () => {
             type="submit"
             variant="contained"
             size="large"
-            color="secondary"
+            color="primary"
             sx={{ py: 1.5 }}
           >
             Send request

@@ -1,12 +1,12 @@
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
   Box,
   Button,
-  Paper,
+  Card,
   Typography,
 } from "@mui/material";
 import { motion } from "framer-motion";
@@ -44,30 +44,52 @@ const Help = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
     >
       <Button
-        startIcon={<ArrowBackIcon />}
+        startIcon={<ArrowBackRoundedIcon />}
         onClick={() => navigate("/dashboard")}
-        sx={{ mb: 2 }}
+        sx={{ mb: 2, color: "text.secondary" }}
       >
         Back to Dashboard
       </Button>
 
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
+        <Typography
+          variant="overline"
+          sx={{ color: "text.secondary", fontWeight: 700, letterSpacing: 1.4 }}
+        >
+          Support
+        </Typography>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, mt: 0.5 }}
+        >
           Help & Support
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           Answers to common questions about BlockScore.
         </Typography>
       </Box>
 
       <Box>
         {faqs.map((faq) => (
-          <Accordion key={faq.question} disableGutters sx={{ mb: 1 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography sx={{ fontWeight: 500 }}>{faq.question}</Typography>
+          <Accordion
+            key={faq.question}
+            disableGutters
+            elevation={0}
+            sx={{
+              mb: 1.25,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: "12px !important",
+              "&::before": { display: "none" },
+              overflow: "hidden",
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+              <Typography sx={{ fontWeight: 600 }}>{faq.question}</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Typography color="text.secondary">{faq.answer}</Typography>
@@ -76,18 +98,15 @@ const Help = () => {
         ))}
       </Box>
 
-      <Paper
-        sx={{ p: 3, mt: 4, borderRadius: 3, textAlign: "center" }}
-        variant="outlined"
-      >
-        <Typography sx={{ fontWeight: 500, mb: 1 }}>
+      <Card sx={{ p: 3, mt: 3, textAlign: "center" }}>
+        <Typography sx={{ fontWeight: 600, mb: 1 }}>
           Still need help?
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Reach out to our support team from your Profile page and we&rsquo;ll
           get back to you as soon as possible.
         </Typography>
-      </Paper>
+      </Card>
     </motion.div>
   );
 };

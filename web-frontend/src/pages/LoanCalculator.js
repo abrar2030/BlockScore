@@ -3,20 +3,18 @@ import {
   Box,
   Button,
   Card,
-  CardContent,
   CircularProgress,
   Divider,
   FormControl,
   Grid,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Slider,
   Snackbar,
+  Stack,
   TextField,
   Typography,
-  useTheme,
 } from "@mui/material";
 import {
   ArcElement,
@@ -45,6 +43,10 @@ ChartJS.register(
   Title,
 );
 
+const INK = "#0D1220";
+const SIGNAL = "#14B8A6";
+const AMBER = "#F2A93B";
+
 // Mirrors models/loan.py LoanType values.
 const LOAN_TYPES = [
   { value: "personal", label: "Personal" },
@@ -57,8 +59,6 @@ const LOAN_TYPES = [
 ];
 
 const LoanCalculator = () => {
-  const theme = useTheme();
-
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState(5000);
   const [rate, setRate] = useState(5);
@@ -145,19 +145,19 @@ const LoanCalculator = () => {
 
   const paymentSchedule = generatePaymentSchedule();
   const chartData = {
-    labels: paymentSchedule.slice(0, 12).map((item) => `Month ${item.month}`),
+    labels: paymentSchedule.slice(0, 12).map((item) => `M${item.month}`),
     datasets: [
       {
         label: "Principal",
         data: paymentSchedule.slice(0, 12).map((item) => item.principal),
-        backgroundColor: theme.palette.primary.main,
-        borderColor: theme.palette.primary.main,
+        backgroundColor: INK,
+        borderColor: INK,
       },
       {
         label: "Interest",
         data: paymentSchedule.slice(0, 12).map((item) => item.interest),
-        backgroundColor: theme.palette.secondary.main,
-        borderColor: theme.palette.secondary.main,
+        backgroundColor: AMBER,
+        borderColor: AMBER,
       },
     ],
   };
@@ -169,7 +169,7 @@ const LoanCalculator = () => {
         data: result
           ? [result.approval_probability, 100 - result.approval_probability]
           : [50, 50],
-        backgroundColor: [theme.palette.success.main, theme.palette.grey[300]],
+        backgroundColor: [SIGNAL, "rgba(13, 18, 32, 0.08)"],
         borderWidth: 0,
       },
     ],
@@ -179,13 +179,23 @@ const LoanCalculator = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
     >
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight={600}>
+        <Typography
+          variant="overline"
+          sx={{ color: "text.secondary", fontWeight: 700, letterSpacing: 1.4 }}
+        >
+          Model a loan
+        </Typography>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ fontWeight: 600, mt: 0.5 }}
+        >
           Loan Calculator
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           Estimate your loan eligibility and monthly payments based on your
           credit score.
         </Typography>
@@ -195,105 +205,161 @@ const LoanCalculator = () => {
         {/* Loan Parameters */}
         <Grid item xs={12} md={6}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
+            initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
+            style={{ height: "100%" }}
           >
-            <Card>
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Loan Parameters
+            <Card sx={{ p: 3, height: "100%" }}>
+              <Typography sx={{ fontWeight: 600, mb: 2.5 }}>
+                Loan Parameters
+              </Typography>
+
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel id="loan-type-label">Loan Type</InputLabel>
+                <Select
+                  labelId="loan-type-label"
+                  label="Loan Type"
+                  value={loanType}
+                  onChange={(e) => setLoanType(e.target.value)}
+                >
+                  {LOAN_TYPES.map((type) => (
+                    <MenuItem key={type.value} value={type.value}>
+                      {type.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Loan Amount
                 </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontWeight: 500,
+                  }}
+                >
+                  ${amount.toLocaleString()}
+                </Typography>
+              </Box>
+              <Slider
+                value={amount}
+                onChange={(_e, newValue) => setAmount(newValue)}
+                min={1000}
+                max={50000}
+                step={500}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `$${value.toLocaleString()}`}
+                sx={{ mb: 3 }}
+              />
 
-                <Box sx={{ mt: 3 }}>
-                  <FormControl fullWidth sx={{ mb: 3 }}>
-                    <InputLabel id="loan-type-label">Loan Type</InputLabel>
-                    <Select
-                      labelId="loan-type-label"
-                      label="Loan Type"
-                      value={loanType}
-                      onChange={(e) => setLoanType(e.target.value)}
-                    >
-                      {LOAN_TYPES.map((type) => (
-                        <MenuItem key={type.value} value={type.value}>
-                          {type.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Interest Rate
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontWeight: 500,
+                  }}
+                >
+                  {rate}%
+                </Typography>
+              </Box>
+              <Slider
+                value={rate}
+                onChange={(_e, newValue) => setRate(newValue)}
+                min={1}
+                max={20}
+                step={0.1}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${value}%`}
+                sx={{ mb: 3 }}
+              />
 
-                  <Typography gutterBottom>
-                    Loan Amount: ${amount.toLocaleString()}
-                  </Typography>
-                  <Slider
-                    value={amount}
-                    onChange={(_e, newValue) => setAmount(newValue)}
-                    min={1000}
-                    max={50000}
-                    step={500}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) => `$${value.toLocaleString()}`}
-                    sx={{ mb: 4 }}
-                  />
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Loan Term
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontWeight: 500,
+                  }}
+                >
+                  {term} months
+                </Typography>
+              </Box>
+              <Slider
+                value={term}
+                onChange={(_e, newValue) => setTerm(newValue)}
+                min={12}
+                max={60}
+                step={12}
+                marks={[
+                  { value: 12, label: "1 yr" },
+                  { value: 24, label: "2 yr" },
+                  { value: 36, label: "3 yr" },
+                  { value: 48, label: "4 yr" },
+                  { value: 60, label: "5 yr" },
+                ]}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${value} months`}
+                sx={{ mb: 4 }}
+              />
 
-                  <Typography gutterBottom>Interest Rate: {rate}%</Typography>
-                  <Slider
-                    value={rate}
-                    onChange={(_e, newValue) => setRate(newValue)}
-                    min={1}
-                    max={20}
-                    step={0.1}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) => `${value}%`}
-                    sx={{ mb: 4 }}
-                  />
+              <TextField
+                label="Purpose (optional)"
+                fullWidth
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                placeholder="e.g. Debt consolidation, home renovation"
+                sx={{ mb: 3 }}
+              />
 
-                  <Typography gutterBottom>Loan Term: {term} months</Typography>
-                  <Slider
-                    value={term}
-                    onChange={(_e, newValue) => setTerm(newValue)}
-                    min={12}
-                    max={60}
-                    step={12}
-                    marks={[
-                      { value: 12, label: "1 yr" },
-                      { value: 24, label: "2 yr" },
-                      { value: 36, label: "3 yr" },
-                      { value: 48, label: "4 yr" },
-                      { value: 60, label: "5 yr" },
-                    ]}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) => `${value} months`}
-                    sx={{ mb: 4 }}
-                  />
+              <Button
+                variant="contained"
+                color="primary"
+                fullWidth
+                size="large"
+                onClick={calculateLoanEligibility}
+                disabled={loading}
+              >
+                {loading ? (
+                  <CircularProgress size={24} color="inherit" />
+                ) : (
+                  "Calculate"
+                )}
+              </Button>
 
-                  <TextField
-                    label="Purpose (optional)"
-                    fullWidth
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
-                    placeholder="e.g. Debt consolidation, home renovation"
-                    sx={{ mb: 3 }}
-                  />
-
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    size="large"
-                    onClick={calculateLoanEligibility}
-                    disabled={loading}
-                    sx={{ mt: 2 }}
-                  >
-                    {loading ? <CircularProgress size={24} /> : "Calculate"}
-                  </Button>
-
-                  {error && (
-                    <Alert severity="error" sx={{ mt: 2 }}>
-                      {error}
-                    </Alert>
-                  )}
-                </Box>
-              </CardContent>
+              {error && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  {error}
+                </Alert>
+              )}
             </Card>
           </motion.div>
         </Grid>
@@ -301,171 +367,186 @@ const LoanCalculator = () => {
         {/* Results */}
         <Grid item xs={12} md={6}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
+            initial={{ y: 16, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            style={{ height: "100%" }}
           >
-            <Card sx={{ height: "100%" }}>
-              <CardContent
-                sx={{
-                  p: 3,
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <Typography variant="h6" gutterBottom>
-                  Loan Eligibility Results
-                </Typography>
+            <Card
+              sx={{
+                p: 3,
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Typography sx={{ fontWeight: 600, mb: 2 }}>
+                Loan Eligibility Results
+              </Typography>
 
-                {!result ? (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexGrow: 1,
-                    }}
-                  >
-                    <Typography color="text.secondary">
-                      Adjust parameters and click Calculate to see results
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Box sx={{ mt: 2, flexGrow: 1 }}>
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} sm={6}>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            mb: 3,
-                          }}
+              {!result ? (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexGrow: 1,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography color="text.secondary">
+                    Adjust parameters and click Calculate to see results
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ mt: 1, flexGrow: 1 }}>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} sm={6}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          mb: 3,
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle2"
+                          color="text.secondary"
+                          gutterBottom
                         >
-                          <Typography
-                            variant="subtitle2"
-                            color="text.secondary"
-                            gutterBottom
-                          >
-                            Approval Probability
-                          </Typography>
-                          <Box sx={{ width: 150, height: 150 }}>
-                            <Doughnut
-                              data={approvalChartData}
-                              options={{
-                                cutout: "70%",
-                                plugins: {
-                                  legend: {
-                                    display: false,
-                                  },
-                                  tooltip: {
-                                    callbacks: {
-                                      label: (context) =>
-                                        `${context.label}: ${context.raw}%`,
-                                    },
+                          Approval Probability
+                        </Typography>
+                        <Box sx={{ width: 150, height: 150 }}>
+                          <Doughnut
+                            data={approvalChartData}
+                            options={{
+                              cutout: "72%",
+                              plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                  callbacks: {
+                                    label: (context) =>
+                                      `${context.label}: ${context.raw}%`,
                                   },
                                 },
-                              }}
-                            />
-                          </Box>
-                          <Typography
-                            variant="h5"
-                            sx={{
-                              mt: 2,
-                              fontWeight: 600,
-                              color:
-                                result.approval_probability > 70
-                                  ? "success.main"
-                                  : result.approval_probability > 50
-                                    ? "primary.main"
-                                    : "warning.main",
+                              },
                             }}
-                          >
-                            {result.approval_probability.toFixed(1)}%
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Based on credit score: {result.credit_score}
-                          </Typography>
+                          />
                         </Box>
-                      </Grid>
-
-                      <Grid item xs={12} sm={6}>
-                        <Paper
-                          elevation={0}
+                        <Typography
+                          variant="h5"
                           sx={{
-                            p: 2,
-                            bgcolor: "background.default",
-                            borderRadius: 2,
+                            mt: 2,
+                            fontWeight: 600,
+                            fontFamily: '"IBM Plex Mono", monospace',
+                            color:
+                              result.approval_probability > 70
+                                ? "success.main"
+                                : result.approval_probability > 50
+                                  ? "primary.dark"
+                                  : "warning.main",
                           }}
                         >
-                          <Typography variant="subtitle2" gutterBottom>
-                            Monthly Payment
-                          </Typography>
-                          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                            ${result.monthly_payment.toFixed(2)}
-                          </Typography>
+                          {result.approval_probability.toFixed(1)}%
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Based on credit score: {result.credit_score}
+                        </Typography>
+                      </Box>
+                    </Grid>
 
-                          <Divider sx={{ my: 1.5 }} />
+                    <Grid item xs={12} sm={6}>
+                      <Box
+                        sx={{
+                          p: 2,
+                          bgcolor: "background.default",
+                          borderRadius: 2,
+                          border: "1px solid",
+                          borderColor: "divider",
+                        }}
+                      >
+                        <Typography variant="subtitle2" gutterBottom>
+                          Monthly Payment
+                        </Typography>
+                        <Typography
+                          variant="h5"
+                          sx={{
+                            fontWeight: 600,
+                            fontFamily: '"IBM Plex Mono", monospace',
+                          }}
+                        >
+                          ${result.monthly_payment.toFixed(2)}
+                        </Typography>
 
+                        <Divider sx={{ my: 1.5 }} />
+
+                        <Stack spacing={1}>
                           <Box
                             sx={{
                               display: "flex",
                               justifyContent: "space-between",
-                              mb: 1,
                             }}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              Loan Amount:
+                              Loan Amount
                             </Typography>
-                            <Typography variant="body2">
+                            <Typography
+                              variant="body2"
+                              sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
+                            >
                               ${amount.toLocaleString()}
                             </Typography>
                           </Box>
-
                           <Box
                             sx={{
                               display: "flex",
                               justifyContent: "space-between",
-                              mb: 1,
                             }}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              Interest Rate:
+                              Interest Rate
                             </Typography>
-                            <Typography variant="body2">{rate}%</Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
+                            >
+                              {rate}%
+                            </Typography>
                           </Box>
-
                           <Box
                             sx={{
                               display: "flex",
                               justifyContent: "space-between",
-                              mb: 1,
                             }}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              Loan Term:
+                              Loan Term
                             </Typography>
-                            <Typography variant="body2">
+                            <Typography
+                              variant="body2"
+                              sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
+                            >
                               {term} months
                             </Typography>
                           </Box>
-
                           <Box
                             sx={{
                               display: "flex",
                               justifyContent: "space-between",
-                              mb: 1,
                             }}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              Total Payment:
+                              Total Payment
                             </Typography>
-                            <Typography variant="body2" fontWeight={500}>
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
+                            >
                               ${result.total_payment.toFixed(2)}
                             </Typography>
                           </Box>
-
                           <Box
                             sx={{
                               display: "flex",
@@ -473,69 +554,66 @@ const LoanCalculator = () => {
                             }}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              Total Interest:
+                              Total Interest
                             </Typography>
-                            <Typography variant="body2" fontWeight={500}>
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
+                            >
                               ${result.total_interest.toFixed(2)}
                             </Typography>
                           </Box>
-                        </Paper>
-                      </Grid>
-                    </Grid>
-
-                    <Box sx={{ mt: 3 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Payment Breakdown (First Year)
-                      </Typography>
-                      <Box sx={{ height: 200 }}>
-                        <Line
-                          data={chartData}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                              y: {
-                                beginAtZero: true,
-                                title: {
-                                  display: true,
-                                  text: "Amount ($)",
-                                },
-                              },
-                            },
-                          }}
-                        />
+                        </Stack>
                       </Box>
-                    </Box>
+                    </Grid>
+                  </Grid>
 
-                    {applyError && (
-                      <Alert severity="error" sx={{ mt: 3 }}>
-                        {applyError}
-                      </Alert>
-                    )}
-
-                    <Box
-                      sx={{
-                        mt: 3,
-                        display: "flex",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        onClick={handleApply}
-                        disabled={applying}
-                      >
-                        {applying ? (
-                          <CircularProgress size={22} color="inherit" />
-                        ) : (
-                          "Apply for Loan"
-                        )}
-                      </Button>
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Payment Breakdown (First Year)
+                    </Typography>
+                    <Box sx={{ height: 200 }}>
+                      <Line
+                        data={chartData}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              title: { display: true, text: "Amount ($)" },
+                            },
+                          },
+                        }}
+                      />
                     </Box>
                   </Box>
-                )}
-              </CardContent>
+
+                  {applyError && (
+                    <Alert severity="error" sx={{ mt: 3 }}>
+                      {applyError}
+                    </Alert>
+                  )}
+
+                  <Box
+                    sx={{ mt: 3, display: "flex", justifyContent: "center" }}
+                  >
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={handleApply}
+                      disabled={applying}
+                    >
+                      {applying ? (
+                        <CircularProgress size={22} color="inherit" />
+                      ) : (
+                        "Apply for Loan"
+                      )}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
             </Card>
           </motion.div>
         </Grid>
