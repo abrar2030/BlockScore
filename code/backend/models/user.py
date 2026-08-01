@@ -8,7 +8,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from extensions import bcrypt, db
-from marshmallow import Schema, ValidationError, fields, validate, validates_schema
+from marshmallow import (
+    EXCLUDE,
+    Schema,
+    ValidationError,
+    fields,
+    validate,
+    validates_schema,
+)
 
 
 class UserStatus(enum.Enum):
@@ -221,9 +228,21 @@ class UserSession(db.Model):
 
 
 class UserRegistrationSchema(Schema):
+    class Meta:
+        # Clients (mobile app in particular) send UI-only consent flags like
+        # terms_accepted/privacy_accepted that have no corresponding column.
+        # Ignore unrecognized fields instead of rejecting the whole request.
+        unknown = EXCLUDE
+
     email = fields.Email(required=True, validate=validate.Length(max=255))
     password = fields.Str(required=True, validate=validate.Length(min=8, max=128))
     confirm_password = fields.Str(required=True)
+    first_name = fields.Str(
+        validate=validate.Length(max=100), allow_none=True, load_default=None
+    )
+    last_name = fields.Str(
+        validate=validate.Length(max=100), allow_none=True, load_default=None
+    )
 
     @validates_schema
     def validate_passwords_match(self, data: Any, **kwargs) -> Any:

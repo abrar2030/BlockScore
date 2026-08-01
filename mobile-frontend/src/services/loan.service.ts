@@ -12,7 +12,13 @@ import { API_CONFIG } from "../config/api.config";
 import httpClient from "./http.client";
 
 export type LoanType =
-  "personal" | "business" | "mortgage" | "auto" | "student" | "crypto_backed";
+  | "personal"
+  | "business"
+  | "mortgage"
+  | "auto"
+  | "student"
+  | "credit_line"
+  | "defi";
 
 export interface LoanCalculationResult {
   loan_amount: number;

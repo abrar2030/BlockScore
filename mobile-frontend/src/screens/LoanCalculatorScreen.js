@@ -51,7 +51,8 @@ const LOAN_TYPES = [
   { value: "mortgage", label: "Mortgage" },
   { value: "auto", label: "Auto" },
   { value: "student", label: "Student" },
-  { value: "crypto_backed", label: "Crypto-Backed" },
+  { value: "credit_line", label: "Credit Line" },
+  { value: "defi", label: "DeFi / Crypto-Backed" },
 ];
 
 const LoanCalculatorScreen = () => {

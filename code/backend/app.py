@@ -369,7 +369,10 @@ def create_app(config_name: Any = "default") -> Flask:
                     409,
                 )
             user = auth_service.create_user(
-                email=data["email"], password=data["password"]
+                email=data["email"],
+                password=data["password"],
+                first_name=data.get("first_name"),
+                last_name=data.get("last_name"),
             )
             audit_service.log_event(
                 event_type=AuditEventType.USER_REGISTRATION,
@@ -707,6 +710,7 @@ def create_app(config_name: Any = "default") -> Flask:
                 requested_amount=data["requested_amount"],
                 requested_term_months=data["requested_term_months"],
                 requested_rate=data.get("requested_rate"),
+                purpose=data.get("purpose"),
                 status=LoanStatus.SUBMITTED,
                 submitted_at=datetime.now(timezone.utc),
             )
@@ -749,7 +753,21 @@ def create_app(config_name: Any = "default") -> Flask:
                 201,
             )
         except Exception as e:
+            from marshmallow import ValidationError as MarshmallowError
+
             app.logger.error(f"Loan application error: {e}")
+            if isinstance(e, MarshmallowError):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Validation Error",
+                            "message": "Invalid loan application data.",
+                            "errors": e.messages,
+                        }
+                    ),
+                    400,
+                )
             return (
                 jsonify(
                     {

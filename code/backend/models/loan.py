@@ -382,6 +382,9 @@ class LoanApplicationSchema(Schema):
     requested_rate = fields.Float(
         validate=validate.Range(min=0, max=100), allow_none=True
     )
+    purpose = fields.Str(
+        validate=validate.Length(max=255), allow_none=True, load_default=None
+    )
     application_data = fields.Dict(load_default={})
 
 
