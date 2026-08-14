@@ -1078,8 +1078,8 @@ def create_app(config_name: Any = "default") -> Flask:
             )
 
             application.blockchain_hash = transaction_hash
-            application.smart_contract_address = blockchain_service.contract_addresses.get(
-                ContractType.LOAN_AGREEMENT
+            application.smart_contract_address = (
+                blockchain_service.contract_addresses.get(ContractType.LOAN_AGREEMENT)
             )
             db.session.commit()
 

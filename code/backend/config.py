@@ -47,9 +47,7 @@ class Config:
     # Per-contract deployment addresses, printed by
     # code/blockchain/scripts/deploy.js after a deployment.
     CREDIT_SCORE_CONTRACT_ADDRESS = os.getenv("CREDIT_SCORE_CONTRACT_ADDRESS", "")
-    LOAN_AGREEMENT_CONTRACT_ADDRESS = os.getenv(
-        "LOAN_AGREEMENT_CONTRACT_ADDRESS", ""
-    )
+    LOAN_AGREEMENT_CONTRACT_ADDRESS = os.getenv("LOAN_AGREEMENT_CONTRACT_ADDRESS", "")
     GOVERNANCE_CONTRACT_ADDRESS = os.getenv("GOVERNANCE_CONTRACT_ADDRESS", "")
     # Overrides the default "../blockchain/artifacts/contracts" relative
     # path used to load compiled contract ABIs. Needed for any deployment

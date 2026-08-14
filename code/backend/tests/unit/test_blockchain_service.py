@@ -14,7 +14,6 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
-
 from models.blockchain import BlockchainTransaction
 
 
@@ -83,9 +82,7 @@ class TestSubmitCreditScoreUpdate:
 
         # And the transaction was actually persisted (this would raise
         # AttributeError if self.db were never assigned).
-        stored = BlockchainTransaction.query.filter_by(
-            transaction_hash=tx_hash
-        ).first()
+        stored = BlockchainTransaction.query.filter_by(transaction_hash=tx_hash).first()
         assert stored is not None
         assert stored.function_name == "addCreditRecord"
 
@@ -156,9 +153,7 @@ class TestRecordPayment:
         assert amount_wei == int(Decimal("250.00") * 10**18)
         assert method == "bank_transfer"
 
-        stored = BlockchainTransaction.query.filter_by(
-            transaction_hash=tx_hash
-        ).first()
+        stored = BlockchainTransaction.query.filter_by(transaction_hash=tx_hash).first()
         assert stored is not None
         assert stored.function_name == "makePayment"
 
