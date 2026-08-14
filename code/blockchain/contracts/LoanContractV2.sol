@@ -226,6 +226,8 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
     error LoanNotActive();
     error PaymentAmountInvalid();
     error UnauthorizedLiquidation();
+    error InvalidSignature();
+    error ProfileFrozen();
 
     /**
      * @dev Constructor
@@ -423,7 +425,13 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
         loan.underwriter = msg.sender;
         loan.riskLevel = riskLevel;
         loan.hasCollateral = requiresCollateral;
-        loan.collateralAmount = collateralAmount;
+        // NOTE: loan.collateralAmount tracks collateral actually deposited
+        // by the borrower via depositCollateral() below, and must start at
+        // zero. The amount required to fund the loan is recorded
+        // separately in loan.terms.collateralRequired above. Pre-seeding
+        // collateralAmount here would let fundLoan()'s "has collateral
+        // been deposited" check pass without any tokens ever being
+        // deposited.
 
         borrowerLoans[app.applicant].push(loanId);
         app.riskAssessment = riskAssessment;
@@ -449,7 +457,10 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
 
         // Check collateral if required
         if (loan.hasCollateral) {
-            require(loan.collateralAmount > 0, "Collateral not deposited");
+            require(
+                loan.collateralAmount >= loan.terms.collateralRequired,
+                "Collateral not deposited"
+            );
         }
 
         // Check reserve requirements
@@ -478,6 +489,7 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
         loan.status = LoanStatus.ACTIVE;
         loan.fundingTimestamp = block.timestamp;
         loan.dueDate = block.timestamp + (loan.terms.termInDays * 1 days);
+        loan.lastPaymentTimestamp = block.timestamp;
         loan.nextPaymentDue = block.timestamp + 30 days; // Monthly payments
 
         // Update totals
@@ -781,15 +793,23 @@ contract LoanContractV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
     {
         Loan storage loan = loans[loanId];
 
-        // Simplified calculation - in production, use more sophisticated amortization
+        // Simplified calculation - in production, use more sophisticated amortization.
+        //
+        // NOTE: the previous version computed `interestRate / 365 / 10000`
+        // first, which truncates to 0 for every realistic basis-point rate
+        // (max allowed is 3600 = 36%, and 3600/365 already rounds down to
+        // 9, then /10000 rounds down to 0). That silently made interest
+        // always zero. Multiplying before dividing preserves precision.
         uint256 outstandingPrincipal =
             loan.terms.principalAmount - loan.amountRepaid;
-        uint256 dailyInterestRate = loan.terms.interestRate / 365 / 10000;
         uint256 daysSinceLastPayment =
             (block.timestamp - loan.lastPaymentTimestamp) / 1 days;
 
         interestPortion =
-            (outstandingPrincipal * dailyInterestRate * daysSinceLastPayment) /
+            (outstandingPrincipal *
+                loan.terms.interestRate *
+                daysSinceLastPayment) /
+            365 /
             10000;
 
         // Apply any late fees

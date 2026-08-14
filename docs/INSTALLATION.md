@@ -130,11 +130,11 @@ nano .env
 ```bash
 cd ../code/blockchain
 
-# Install Truffle globally (if not installed)
-npm install -g truffle
+# Install dependencies (includes Hardhat)
+npm install
 
-# Compile contracts
-truffle compile
+# Compile contracts (fully offline, via the local solc npm package)
+npm run compile
 ```
 
 ### Method 3: Docker Installation (Coming Soon)
@@ -279,12 +279,12 @@ python app.py
 ```bash
 cd code/blockchain
 
-# Start local blockchain (Ganache)
-ganache-cli -p 8545
+# Start a local blockchain node (Hardhat's built-in node)
+npx hardhat node
 
 # In another terminal, compile and deploy
-truffle compile
-truffle migrate --network development
+npm run compile
+npm run deploy:local
 ```
 
 ### 4. Generate Secret Keys
@@ -335,7 +335,7 @@ pytest
 
 # Smart contract tests
 cd code/blockchain
-truffle test
+npm test
 
 # Frontend tests
 cd web-frontend

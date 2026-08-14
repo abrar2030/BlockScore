@@ -5,16 +5,18 @@
 # This script automates the deployment of smart contracts to different
 # blockchain networks with proper configuration and verification.
 #
-# This project uses Truffle (see code/blockchain/truffle-config.js), not
-# Hardhat. Truffle's config currently only defines a "development" network
-# (127.0.0.1:8545); deploying to "test" or "mainnet" requires adding a
-# matching network entry to truffle-config.js first (typically via
-# @truffle/hdwallet-provider using PROVIDER_URL/PRIVATE_KEY, which this
-# script already loads from .env.<network>).
+# This project uses Hardhat (see code/blockchain/hardhat.config.js), not
+# Truffle. hardhat.config.js currently only defines "hardhat" (an
+# in-memory ephemeral network) and "development" (127.0.0.1:8545);
+# deploying to "test" or "mainnet" requires adding a matching network
+# entry to hardhat.config.js first (typically an RPC url + accounts list,
+# sourced from PROVIDER_URL/PRIVATE_KEY, which this script already loads
+# from .env.<network>).
 #
 # Features:
 # - Multi-network deployment support (development, test, mainnet)
-# - Contract verification on block explorers (requires truffle-plugin-verify)
+# - Contract verification on block explorers (requires @nomicfoundation/hardhat-verify,
+#   already bundled in @nomicfoundation/hardhat-toolbox)
 # - Gas optimization
 # - Deployment tracking and history
 # - Security checks before deployment
@@ -57,7 +59,7 @@ print_usage() {
   echo "Options:"
   echo "  -h, --help                 Show this help message"
   echo "  -n, --network <network>    Specify network (development, test, mainnet)"
-  echo "  -v, --verify               Verify contracts on block explorer (requires truffle-plugin-verify)"
+  echo "  -v, --verify               Verify contracts on block explorer (requires @nomicfoundation/hardhat-verify)"
   echo "  --no-gas-optimization      Disable gas optimization"
   echo "  --no-security-check        Disable security checks"
   echo ""
@@ -133,39 +135,50 @@ log_message() {
   esac
 }
 
-# Function to check if the blockchain directory and Truffle config exist
+# Function to check if the blockchain directory and Hardhat config exist
 check_blockchain_directory() {
   if [ ! -d "$BLOCKCHAIN_DIR" ]; then
     log_message "ERROR" "Blockchain directory not found: $BLOCKCHAIN_DIR"
     exit 1
   fi
 
-  if [ ! -f "${BLOCKCHAIN_DIR}/truffle-config.js" ]; then
-    log_message "ERROR" "truffle-config.js not found in blockchain directory"
+  if [ ! -f "${BLOCKCHAIN_DIR}/hardhat.config.js" ]; then
+    log_message "ERROR" "hardhat.config.js not found in blockchain directory"
     exit 1
   fi
 
   if ! command -v npx &> /dev/null; then
-    log_message "ERROR" "npx not found. Install Node.js to run Truffle."
+    log_message "ERROR" "npx not found. Install Node.js to run Hardhat."
     exit 1
+  fi
+
+  if [ ! -d "${BLOCKCHAIN_DIR}/node_modules" ]; then
+    log_message "INFO" "node_modules not found; running npm install"
+    (cd "$BLOCKCHAIN_DIR" && npm install)
   fi
 
   log_message "INFO" "Blockchain directory validated"
 }
 
 # Function to confirm the requested network is actually defined in
-# truffle-config.js, so a missing network fails with a clear, actionable
-# message instead of a confusing Truffle error deep into the process.
+# hardhat.config.js, so a missing network fails with a clear, actionable
+# message instead of a confusing Hardhat error deep into the process.
+#
+# hardhat.config.js can't simply be require()'d standalone the way
+# truffle-config.js could - it registers plugin hooks (via
+# @nomicfoundation/hardhat-toolbox) that need a full Hardhat runtime
+# context, so this greps the networks block instead of loading the file.
 validate_network_configured() {
-  log_message "INFO" "Checking that network '$NETWORK' is configured in truffle-config.js"
+  log_message "INFO" "Checking that network '$NETWORK' is configured in hardhat.config.js"
 
   cd "$BLOCKCHAIN_DIR"
 
-  if node -e "const cfg = require('./truffle-config.js'); process.exit(cfg.networks && cfg.networks['$NETWORK'] ? 0 : 1);" 2>/dev/null; then
+  if grep -qE "^\s*${NETWORK}\s*:\s*\{" hardhat.config.js; then
     log_message "SUCCESS" "Network '$NETWORK' is configured"
   else
-    log_message "ERROR" "Network '$NETWORK' is not defined in ${BLOCKCHAIN_DIR}/truffle-config.js"
-    log_message "ERROR" "Add a networks.$NETWORK entry (see the Truffle docs for @truffle/hdwallet-provider) before deploying to this network."
+    log_message "ERROR" "Network '$NETWORK' is not defined in ${BLOCKCHAIN_DIR}/hardhat.config.js"
+    log_message "ERROR" "Add a networks.$NETWORK entry (url + accounts, typically sourced from"
+    log_message "ERROR" "PROVIDER_URL/PRIVATE_KEY) before deploying to this network."
     exit 1
   fi
 }
@@ -206,17 +219,6 @@ load_environment_variables() {
   log_message "SUCCESS" "Environment variables loaded successfully"
 }
 
-# Ensure code/blockchain has a package.json so devDependency installs
-# (e.g. solhint) have somewhere to record themselves; the directory ships
-# without one since contracts are compiled via a globally available truffle.
-ensure_package_json() {
-  cd "$BLOCKCHAIN_DIR"
-  if [ ! -f "package.json" ]; then
-    log_message "INFO" "No package.json in blockchain directory; creating one"
-    npm init -y > /dev/null
-  fi
-}
-
 # Function to run security checks
 run_security_checks() {
   if [ "$SECURITY_CHECK" = false ]; then
@@ -227,7 +229,6 @@ run_security_checks() {
   log_message "INFO" "Running security checks on smart contracts"
 
   cd "$BLOCKCHAIN_DIR"
-  ensure_package_json
 
   # Check if solhint is installed
   if ! npm list solhint > /dev/null 2>&1 && ! command -v solhint &> /dev/null; then
@@ -272,43 +273,34 @@ run_security_checks() {
   log_message "SUCCESS" "Security checks completed"
 }
 
-# Function to optimize gas usage (Truffle's compilers.solc.settings.optimizer,
-# not Hardhat's solidity.settings.optimizer)
+# Function to check gas optimization is enabled (Hardhat's
+# solidity.settings.optimizer, not Truffle's compilers.solc.settings.optimizer)
 optimize_gas() {
   if [ "$GAS_OPTIMIZATION" = false ]; then
     log_message "WARNING" "Gas optimization disabled"
     return 0
   fi
 
-  log_message "INFO" "Optimizing gas usage for smart contracts"
+  log_message "INFO" "Checking gas optimization settings for smart contracts"
 
   cd "$BLOCKCHAIN_DIR"
 
-  CONFIG_FILE="truffle-config.js"
+  CONFIG_FILE="hardhat.config.js"
   if [ ! -f "$CONFIG_FILE" ]; then
-    log_message "ERROR" "truffle-config.js not found"
+    log_message "ERROR" "hardhat.config.js not found"
     exit 1
   fi
 
-  # Check if optimization is already enabled. Checked as two separate
-  # patterns (rather than one regex spanning both) since grep matches
-  # line-by-line and real-world configs commonly format this across
-  # multiple lines, e.g.:
+  # Checked as two separate patterns (rather than one regex spanning
+  # both) since grep matches line-by-line and hardhat.config.js commonly
+  # formats this across multiple lines, e.g.:
   #   optimizer: {
   #     enabled: true,
   if grep -q "optimizer:" "$CONFIG_FILE" && grep -qE "enabled:\s*true" "$CONFIG_FILE"; then
-    log_message "INFO" "Gas optimization already enabled in $CONFIG_FILE"
-  elif grep -q "compilers:" "$CONFIG_FILE"; then
-    log_message "WARNING" "A compilers block exists in $CONFIG_FILE but optimizer settings were not detected in the expected format."
-    log_message "WARNING" "Please verify compilers.solc.settings.optimizer manually; leaving the file untouched."
+    log_message "SUCCESS" "Gas optimization already enabled in $CONFIG_FILE"
   else
-    # Backup the config file
-    cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-
-    # Add a compilers block with the optimizer enabled
-    sed -i '/module.exports = {/a \  compilers: {\n    solc: {\n      settings: {\n        optimizer: { enabled: true, runs: 200 },\n      },\n    },\n  },' "$CONFIG_FILE"
-
-    log_message "SUCCESS" "Gas optimization enabled in $CONFIG_FILE"
+    log_message "WARNING" "Gas optimization (solidity.settings.optimizer.enabled) not detected in $CONFIG_FILE."
+    log_message "WARNING" "Add it under the solidity.settings block manually before deploying to a paid network."
   fi
 }
 
@@ -318,13 +310,13 @@ compile_contracts() {
 
   cd "$BLOCKCHAIN_DIR"
 
-  # Clean the build output directory
-  if [ -d "build" ]; then
-    rm -rf build
+  # Clean Hardhat's build output directories
+  if [ -d "artifacts" ] || [ -d "cache" ]; then
+    npx hardhat clean
   fi
 
   # Compile contracts
-  if ! npx truffle compile; then
+  if ! npx hardhat compile; then
     log_message "ERROR" "Failed to compile smart contracts"
     exit 1
   fi
@@ -340,50 +332,32 @@ deploy_contracts() {
 
   # Create deployment directory if it doesn't exist
   mkdir -p "deployments/$NETWORK"
-  MIGRATE_OUTPUT="deployments/$NETWORK/migrate_output_$(date +%Y%m%d%H%M%S).log"
+  DEPLOY_OUTPUT="deployments/$NETWORK/deploy_output_$(date +%Y%m%d%H%M%S).log"
 
-  log_message "INFO" "Running: truffle migrate --network $NETWORK"
+  log_message "INFO" "Running: npx hardhat run scripts/deploy.js --network $NETWORK"
 
-  if ! npx truffle migrate --network "$NETWORK" --reset 2>&1 | tee "$MIGRATE_OUTPUT"; then
+  # scripts/deploy.js deploys every contract, wires up the cross-contract
+  # roles they need (unlike the old Truffle migration, which only ever
+  # deployed CreditScore v1 + LoanContract v1 and never granted
+  # LoanContract permission to call back into CreditScore), and writes
+  # deployments/$NETWORK/addresses.json + constructor-args.json itself -
+  # so unlike the old Truffle flow, there's no log-scraping needed here.
+  if ! npx hardhat run scripts/deploy.js --network "$NETWORK" 2>&1 | tee "$DEPLOY_OUTPUT"; then
     log_message "ERROR" "Failed to deploy smart contracts"
     exit 1
   fi
 
-  # Truffle does not write a clean addresses summary on its own; extract
-  # "Deploying 'ContractName'" / "contract address: 0x..." pairs from the
-  # migration output into deployments/$NETWORK/addresses.json so the rest
-  # of this script (verification, deployment records) has one to read.
-  python3 - "$MIGRATE_OUTPUT" "deployments/$NETWORK/addresses.json" << 'PYEOF'
-import json
-import re
-import sys
-
-log_path, out_path = sys.argv[1], sys.argv[2]
-with open(log_path) as f:
-    text = f.read()
-
-addresses = {}
-current = None
-for line in text.splitlines():
-    m = re.search(r"Deploying '([^']+)'", line)
-    if m:
-        current = m.group(1)
-        continue
-    m = re.search(r"contract address:\s+(0x[a-fA-F0-9]{40})", line)
-    if m and current:
-        addresses[current] = m.group(1)
-        current = None
-
-with open(out_path, "w") as f:
-    json.dump(addresses, f, indent=2)
-
-print(f"Recorded {len(addresses)} deployed contract address(es).")
-PYEOF
+  if [ ! -f "deployments/$NETWORK/addresses.json" ]; then
+    log_message "ERROR" "scripts/deploy.js did not produce deployments/$NETWORK/addresses.json"
+    exit 1
+  fi
 
   log_message "SUCCESS" "Smart contracts deployed successfully to network: $NETWORK"
 }
 
-# Function to verify contracts on a block explorer via truffle-plugin-verify.
+# Function to verify contracts on a block explorer via
+# @nomicfoundation/hardhat-verify (bundled in @nomicfoundation/hardhat-toolbox,
+# already a devDependency - see package.json).
 verify_contracts() {
   if [ "$VERIFY" = false ]; then
     log_message "INFO" "Contract verification skipped"
@@ -399,32 +373,40 @@ verify_contracts() {
 
   cd "$BLOCKCHAIN_DIR"
 
-  if ! npm list truffle-plugin-verify > /dev/null 2>&1; then
-    log_message "WARNING" "truffle-plugin-verify is not installed."
-    log_message "WARNING" "Run: npm install --save-dev truffle-plugin-verify, and add"
-    log_message "WARNING" "  plugins: ['truffle-plugin-verify']"
-    log_message "WARNING" "to truffle-config.js, then re-run with --verify."
+  if ! npm list @nomicfoundation/hardhat-verify > /dev/null 2>&1 \
+    && ! npm list @nomicfoundation/hardhat-toolbox > /dev/null 2>&1; then
+    log_message "WARNING" "@nomicfoundation/hardhat-verify is not installed."
+    log_message "WARNING" "Run: npm install --save-dev @nomicfoundation/hardhat-verify, and set"
+    log_message "WARNING" "  etherscan: { apiKey: process.env.ETHERSCAN_API_KEY }"
+    log_message "WARNING" "in hardhat.config.js, then re-run with --verify."
     return 1
   fi
 
-  # Check if deployment addresses file exists
-  DEPLOYMENT_FILE="deployments/$NETWORK/addresses.json"
+  ADDRESSES_FILE="deployments/$NETWORK/addresses.json"
+  ARGS_FILE="deployments/$NETWORK/constructor-args.json"
 
-  if [ ! -f "$DEPLOYMENT_FILE" ]; then
-    log_message "ERROR" "Deployment addresses file not found: $DEPLOYMENT_FILE"
+  if [ ! -f "$ADDRESSES_FILE" ]; then
+    log_message "ERROR" "Deployment addresses file not found: $ADDRESSES_FILE"
     log_message "WARNING" "Contract verification skipped"
     return 1
   fi
 
-  # Read contract addresses from deployment file
-  CONTRACTS=$(jq -r 'keys[]' "$DEPLOYMENT_FILE")
+  CONTRACTS=$(jq -r 'keys[]' "$ADDRESSES_FILE")
 
   for CONTRACT in $CONTRACTS; do
-    ADDRESS=$(jq -r ".[\"$CONTRACT\"]" "$DEPLOYMENT_FILE")
+    ADDRESS=$(jq -r ".[\"$CONTRACT\"]" "$ADDRESSES_FILE")
+
+    # Constructor args, space-separated, quoted for safety (addresses
+    # don't need JSON escaping, but this keeps things robust regardless).
+    ARGS=""
+    if [ -f "$ARGS_FILE" ]; then
+      ARGS=$(jq -r --arg c "$CONTRACT" '(.[$c] // []) | map("\"" + . + "\"") | join(" ")' "$ARGS_FILE")
+    fi
 
     log_message "INFO" "Verifying contract: $CONTRACT at address: $ADDRESS"
 
-    if ! npx truffle run verify "${CONTRACT}@${ADDRESS}" --network "$NETWORK"; then
+    # shellcheck disable=SC2086
+    if ! npx hardhat verify --network "$NETWORK" "$ADDRESS" $ARGS; then
       log_message "WARNING" "Failed to verify contract: $CONTRACT"
       continue
     fi

@@ -33,6 +33,7 @@ from flask_jwt_extended import (
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from models.audit import AuditEventType, AuditSeverity
+from models.blockchain import ContractType
 from models.credit import CreditHistory, CreditScore
 from models.loan import LoanApplication, LoanApplicationSchema, LoanStatus, LoanType
 from models.user import User, UserLoginSchema, UserProfileSchema, UserRegistrationSchema
@@ -1013,6 +1014,105 @@ def create_app(config_name: Any = "default") -> Flask:
                         "success": False,
                         "error": "Retrieval Failed",
                         "message": "An error occurred while retrieving loan applications.",
+                    }
+                ),
+                500,
+            )
+
+    @app.route("/api/loans/applications/<application_id>/blockchain", methods=["POST"])
+    @jwt_required()
+    @limiter.limit("10 per hour")
+    def record_loan_application_blockchain_tx(
+        application_id: str,
+    ) -> Tuple[Any, int]:
+        """Attach an on-chain transaction to an existing loan application.
+
+        LoanContractV2.submitLoanApplication() must be called directly by
+        the applicant's own wallet (it's EIP-712 signed by msg.sender, and
+        the backend can't produce that signature on a user's behalf - see
+        blockchain_service.submit_loan_agreement's docstring). So the
+        client (web-frontend/src/contexts/Web3Context.js) submits that
+        transaction itself, then calls this endpoint with the resulting
+        transaction hash so it's linked to the off-chain application
+        record and tracked in the BlockchainTransaction ledger.
+        """
+        try:
+            user_id = get_jwt_identity()
+            application = LoanApplication.query.filter_by(
+                id=application_id, user_id=user_id
+            ).first()
+            if not application:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Not Found",
+                            "message": "Loan application not found.",
+                        }
+                    ),
+                    404,
+                )
+
+            data = request.json or {}
+            transaction_hash = data.get("transaction_hash")
+            wallet_address = data.get("wallet_address")
+            if not transaction_hash or not wallet_address:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Validation Error",
+                            "message": "transaction_hash and wallet_address are required.",
+                        }
+                    ),
+                    400,
+                )
+
+            bc_result = blockchain_service.submit_loan_agreement(
+                loan_id=application.id,
+                borrower_address=wallet_address,
+                transaction_hash=transaction_hash,
+                loan_amount=application.requested_amount,
+                term_months=application.requested_term_months,
+                interest_rate=application.requested_rate,
+            )
+
+            application.blockchain_hash = transaction_hash
+            application.smart_contract_address = blockchain_service.contract_addresses.get(
+                ContractType.LOAN_AGREEMENT
+            )
+            db.session.commit()
+
+            audit_service.log_event(
+                event_type=AuditEventType.LOAN_APPLICATION,
+                event_description=f"On-chain transaction recorded for application {application.application_number}",
+                user_id=user_id,
+                resource_type="loan_application",
+                resource_id=application.id,
+                event_data={"transaction_hash": transaction_hash},
+            )
+
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "message": "On-chain transaction recorded",
+                        "data": {
+                            "application": application.to_dict(),
+                            "blockchain_transaction": bc_result,
+                        },
+                    }
+                ),
+                200,
+            )
+        except Exception as e:
+            app.logger.error(f"Loan application blockchain recording error: {e}")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Recording Failed",
+                        "message": "An error occurred while recording the on-chain transaction.",
                     }
                 ),
                 500,

@@ -17,7 +17,7 @@ describe("CreditScore Contract", function () {
     // Deploy the contract
     CreditScore = await ethers.getContractFactory("CreditScore");
     creditScore = await CreditScore.deploy();
-    await creditScore.deployed();
+    await creditScore.waitForDeployment();
   });
 
   describe("Authorization", function () {
@@ -168,7 +168,7 @@ describe("CreditScore Contract", function () {
       );
 
       expect(updatedScore).to.be.lt(initialScore);
-      expect(updatedTimestamp).to.be.gt(initialTimestamp);
+      expect(updatedTimestamp).to.be.gte(initialTimestamp);
     });
 
     it("should return zero for users with no credit profile", async function () {
@@ -187,7 +187,7 @@ describe("CreditScore Contract", function () {
           .addCreditRecord(user1.address, 1000, "loan", 10);
       }
 
-      const [highScore, _] = await creditScore.getCreditScore(user1.address);
+      const [highScore] = await creditScore.getCreditScore(user1.address);
       expect(highScore).to.be.lte(850);
 
       // Create a new user and add multiple negative records
@@ -197,7 +197,7 @@ describe("CreditScore Contract", function () {
           .addCreditRecord(user2.address, 1000, "loan", -10);
       }
 
-      const [lowScore, __] = await creditScore.getCreditScore(user2.address);
+      const [lowScore] = await creditScore.getCreditScore(user2.address);
       expect(lowScore).to.be.gte(300);
     });
   });

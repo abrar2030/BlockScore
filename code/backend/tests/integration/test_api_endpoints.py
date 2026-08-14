@@ -201,6 +201,93 @@ class TestLoanEndpoints:
         )
         assert response.status_code in (201, 400, 500)
 
+    def test_record_blockchain_tx_for_own_application(
+        self, client: Any, db: Any, sample_user: Any
+    ) -> Any:
+        """Submitting an application, then reporting the on-chain tx hash
+        the borrower's own wallet broadcast for it, should link the two."""
+        login_resp = client.post(
+            "/api/auth/login",
+            json={"email": sample_user.email, "password": "TestPassword123!"},
+            content_type="application/json",
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Login failed, skipping downstream test")
+        token = login_resp.get_json()["tokens"]["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        apply_resp = client.post(
+            "/api/loans/apply",
+            json={
+                "loan_type": "personal",
+                "requested_amount": "5000.00",
+                "requested_term_months": 24,
+            },
+            headers=headers,
+            content_type="application/json",
+        )
+        if apply_resp.status_code != 201:
+            pytest.skip("Loan application creation failed, skipping downstream test")
+        application_id = apply_resp.get_json()["data"]["id"]
+
+        tx_hash = "0x" + "ab" * 32
+        bc_resp = client.post(
+            f"/api/loans/applications/{application_id}/blockchain",
+            json={
+                "transaction_hash": tx_hash,
+                "wallet_address": "0x1234567890123456789012345678901234567890",
+            },
+            headers=headers,
+            content_type="application/json",
+        )
+        assert bc_resp.status_code == 200
+        body = bc_resp.get_json()
+        assert body["success"] is True
+        assert body["data"]["application"]["blockchain_hash"] == tx_hash
+
+    def test_record_blockchain_tx_requires_fields(
+        self, client: Any, db: Any, sample_user: Any
+    ) -> Any:
+        login_resp = client.post(
+            "/api/auth/login",
+            json={"email": sample_user.email, "password": "TestPassword123!"},
+            content_type="application/json",
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Login failed, skipping downstream test")
+        token = login_resp.get_json()["tokens"]["access_token"]
+
+        response = client.post(
+            "/api/loans/applications/some-id/blockchain",
+            json={},
+            headers={"Authorization": f"Bearer {token}"},
+            content_type="application/json",
+        )
+        assert response.status_code in (400, 404)
+
+    def test_record_blockchain_tx_unknown_application(
+        self, client: Any, db: Any, sample_user: Any
+    ) -> Any:
+        login_resp = client.post(
+            "/api/auth/login",
+            json={"email": sample_user.email, "password": "TestPassword123!"},
+            content_type="application/json",
+        )
+        if login_resp.status_code != 200:
+            pytest.skip("Login failed, skipping downstream test")
+        token = login_resp.get_json()["tokens"]["access_token"]
+
+        response = client.post(
+            "/api/loans/applications/does-not-exist/blockchain",
+            json={
+                "transaction_hash": "0x" + "cd" * 32,
+                "wallet_address": "0x1234567890123456789012345678901234567890",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+            content_type="application/json",
+        )
+        assert response.status_code == 404
+
 
 class TestProfileUpdateEndpoint:
     """Integration tests for the profile update endpoint"""

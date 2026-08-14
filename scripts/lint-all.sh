@@ -184,7 +184,7 @@ deactivate
 echo "----------------------------------------"
 echo "Running JavaScript/TypeScript linting tools..."
 
-# 2.1 web-frontend (Create React App): use its own local ESLint and config
+# 2.1 web-frontend (Vite): use its own local ESLint and config
 if [ -d "web-frontend" ]; then
   (
     cd web-frontend
@@ -228,8 +228,9 @@ if [ -d "code/blockchain" ]; then
     cd code/blockchain
 
     # Ensure a package.json exists so devDependency installs (solhint) have
-    # somewhere to record themselves; this directory ships without one
-    # since contracts are compiled via a globally available truffle.
+    # somewhere to record themselves. code/blockchain now ships its own
+    # package.json (Hardhat, OpenZeppelin, solc), so this is a defensive
+    # fallback rather than the normal path.
     if [ ! -f "package.json" ]; then
       npm init -y > /dev/null
     fi

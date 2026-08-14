@@ -13,9 +13,10 @@
 #
 # Components map to real project directories as follows:
 #   backend    -> code/backend       (Python/Flask, started with `python app.py`)
-#   blockchain -> code/blockchain    (Truffle; a local chain is started with Ganache,
-#                                      matching truffle-config.js's development network)
-#   frontend   -> web-frontend       (Create React App dev server)
+#   blockchain -> code/blockchain    (Hardhat; a local chain is started with
+#                                      `npx hardhat node`, matching hardhat.config.js's
+#                                      development network)
+#   frontend   -> web-frontend       (Vite dev server)
 #   mobile     -> mobile-frontend    (React Native / Metro dev server)
 #   ai         -> code/ai_models     (Python; server.py or app.py)
 # ========================================================================
@@ -61,7 +62,7 @@ print_usage() {
   echo ""
   echo "Components:"
   echo "  all                        Restart all components (default)"
-  echo "  blockchain                 Restart the local blockchain (Ganache)"
+  echo "  blockchain                 Restart the local blockchain (Hardhat node)"
   echo "  backend                    Restart backend services"
   echo "  frontend                   Restart frontend development server"
   echo "  mobile                     Restart mobile development server"
@@ -312,23 +313,22 @@ start_component() {
     blockchain)
       if [ -d "${PROJECT_DIR}/code/blockchain" ]; then
         cd "${PROJECT_DIR}/code/blockchain"
-        # This project uses Truffle (truffle-config.js), which does not
-        # bundle its own dev chain the way Hardhat does. Ganache provides
-        # the local chain, matching the configured development network
+        # This project uses Hardhat (hardhat.config.js), which bundles
+        # its own in-process dev chain - no separate Ganache install
+        # needed. This matches the configured "development" network
         # (127.0.0.1:8545).
-        if command -v ganache &> /dev/null; then
-          ganache --port 8545 > "${CONFIG_DIR}/blockchain.log" 2>&1 &
-        elif command -v ganache-cli &> /dev/null; then
-          ganache-cli --port 8545 > "${CONFIG_DIR}/blockchain.log" 2>&1 &
-        elif command -v npx &> /dev/null; then
-          npx --yes ganache --port 8545 > "${CONFIG_DIR}/blockchain.log" 2>&1 &
+        if [ ! -d "node_modules" ] && command -v npm &> /dev/null; then
+          npm install
+        fi
+        if command -v npx &> /dev/null; then
+          npx hardhat node > "${CONFIG_DIR}/blockchain.log" 2>&1 &
         else
-          echo -e "${RED}Neither ganache nor npx found. Install Node.js and Ganache (npm i -g ganache).${NC}"
+          echo -e "${RED}npx not found. Install Node.js.${NC}"
           return 1
         fi
         local pid=$!
         save_process_id "$component" "$pid"
-        echo -e "${GREEN}Local blockchain (Ganache) started with PID $pid${NC}"
+        echo -e "${GREEN}Local blockchain (Hardhat node) started with PID $pid${NC}"
       else
         echo -e "${RED}Blockchain directory not found${NC}"
         return 1

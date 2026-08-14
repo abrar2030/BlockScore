@@ -236,50 +236,47 @@ REACT_APP_ENV=staging npm run build
 
 ## Smart Contract Configuration
 
-### Truffle Configuration
+### Hardhat Configuration
 
-File: `code/blockchain/truffle-config.js`
+File: `code/blockchain/hardhat.config.js`
+
+Currently defines an in-memory `hardhat` network and a `development` network (`127.0.0.1:8545`, matching `npx hardhat node`). To deploy to a real network (e.g. Polygon Amoy), add a matching entry to the `networks` block:
 
 ```javascript
+require("@nomicfoundation/hardhat-toolbox");
+// ...existing offline-solc subtask override (see the file for why)...
+
 module.exports = {
-  networks: {
-    development: {
-      host: "127.0.0.1",
-      port: 8545,
-      network_id: "*",
-      gas: 6721975,
-      gasPrice: 20000000000,
-    },
-    mumbai: {
-      provider: () =>
-        new HDWalletProvider(
-          process.env.MNEMONIC,
-          "https://rpc-mumbai.maticvigil.com",
-        ),
-      network_id: 80001,
-      confirmations: 2,
-      timeoutBlocks: 200,
-      skipDryRun: true,
-    },
-    polygon: {
-      provider: () =>
-        new HDWalletProvider(process.env.MNEMONIC, "https://polygon-rpc.com"),
-      network_id: 137,
-      confirmations: 5,
-      timeoutBlocks: 200,
-      skipDryRun: true,
-      gasPrice: 50000000000, // 50 gwei
+  solidity: {
+    version: "0.8.20",
+    settings: {
+      optimizer: { enabled: true, runs: 200 },
+      viaIR: true, // needed for CreditScoreV2/LoanContractV2 - see README.md
     },
   },
-  compilers: {
-    solc: {
-      version: "0.8.0",
-      settings: {
-        optimizer: {
-          enabled: true,
-          runs: 200,
-        },
-      },
+  networks: {
+    hardhat: { chainId: 1337 },
+    development: { url: "http://127.0.0.1:8545", chainId: 1337 },
+    amoy: {
+      url:
+        process.env.POLYGON_AMOY_RPC_URL ||
+        "https://rpc-amoy.polygon.technology",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
+    polygon: {
+      url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
+  },
+  // Needed for `npx hardhat verify` (bundled in @nomicfoundation/hardhat-toolbox)
+  etherscan: {
+    apiKey: {
+      polygonAmoy: process.env.POLYGONSCAN_API_KEY || "",
+      polygon: process.env.POLYGONSCAN_API_KEY || "",
     },
   },
 };
@@ -288,11 +285,15 @@ module.exports = {
 ### Contract Deployment Configuration
 
 ```bash
-# .env for smart contracts
-MNEMONIC="your twelve word mnemonic phrase here"
-INFURA_PROJECT_ID=your-infura-project-id
-ETHERSCAN_API_KEY=your-etherscan-api-key
+# .env for smart contract deployment (code/blockchain/.env, or
+# code/blockchain/.env.<network> - loaded by scripts/smart_contract_deploy.sh)
+PROVIDER_URL=https://rpc-amoy.polygon.technology
+PRIVATE_KEY=your-deployer-private-key
+DEPLOYER_PRIVATE_KEY=your-deployer-private-key
 POLYGONSCAN_API_KEY=your-polygonscan-api-key
+# Only needed on non-local networks - see code/blockchain/scripts/deploy.js
+LENDING_TOKEN_ADDRESS=0x...
+TREASURY_ADDRESS=0x...
 ```
 
 ## Infrastructure Configuration

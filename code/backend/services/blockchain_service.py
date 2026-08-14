@@ -8,7 +8,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from extensions import db
 from models.blockchain import (
@@ -37,19 +37,15 @@ class BlockchainService:
     def __init__(self, config: Any) -> None:
         self.config = config
         self.logger = logging.getLogger(__name__)
+        # Used by _create_blockchain_transaction and other methods below
+        # for self.db.session.add/commit/rollback. This was previously
+        # never assigned, so any call that recorded a transaction (i.e.
+        # every real on-chain call this service makes) would crash with
+        # AttributeError: 'BlockchainService' object has no attribute 'db'.
+        self.db = db
         self.web3 = None
         self.is_connected_flag = False
         self._initialize_web3()
-        self.contract_addresses = {
-            ContractType.CREDIT_SCORE: config.get("CREDIT_SCORE_CONTRACT_ADDRESS"),
-            ContractType.LOAN_AGREEMENT: config.get("LOAN_AGREEMENT_CONTRACT_ADDRESS"),
-            ContractType.IDENTITY_REGISTRY: config.get(
-                "IDENTITY_REGISTRY_CONTRACT_ADDRESS"
-            ),
-            ContractType.PAYMENT_PROCESSOR: config.get(
-                "PAYMENT_PROCESSOR_CONTRACT_ADDRESS"
-            ),
-        }
         self.default_gas_limit = 200000
         self.default_gas_price = (
             Web3.to_wei(20, "gwei") if _WEB3_AVAILABLE and Web3 else 20000000000
@@ -58,6 +54,20 @@ class BlockchainService:
         self.transaction_timeout = 300
         self.network_id = config.get("BLOCKCHAIN_NETWORK_ID", 1)
         self.network_name = config.get("BLOCKCHAIN_NETWORK_NAME", "ethereum")
+        self.contract_addresses = {
+            ContractType.CREDIT_SCORE: config.get("CREDIT_SCORE_CONTRACT_ADDRESS"),
+            ContractType.LOAN_AGREEMENT: config.get("LOAN_AGREEMENT_CONTRACT_ADDRESS"),
+            ContractType.GOVERNANCE: config.get("GOVERNANCE_CONTRACT_ADDRESS"),
+            # No IdentityRegistry or PaymentProcessor contract exists in
+            # code/blockchain/contracts yet - these stay unconfigured until
+            # those contracts are actually built and deployed.
+            ContractType.IDENTITY_REGISTRY: config.get(
+                "IDENTITY_REGISTRY_CONTRACT_ADDRESS"
+            ),
+            ContractType.PAYMENT_PROCESSOR: config.get(
+                "PAYMENT_PROCESSOR_CONTRACT_ADDRESS"
+            ),
+        }
         self.contract_abis = self._load_contract_abis()
 
     def is_connected(self) -> bool:
@@ -74,9 +84,30 @@ class BlockchainService:
             return False
 
     def submit_credit_score_update(
-        self, user_id: str, credit_score_id: str, score: int, wallet_address: str
+        self,
+        user_id: str,
+        credit_score_id: str,
+        score: int,
+        wallet_address: str,
+        previous_score: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Submit credit score update to blockchain"""
+        """Record a credit score recalculation event on-chain.
+
+        CreditScoreV2 has no function to directly set an absolute score -
+        by design its on-chain score is always derived from a history of
+        individual credit records (see `addCreditRecord` in
+        code/blockchain/contracts/CreditScoreV2.sol), which keeps it
+        auditable rather than an opaque value anyone could overwrite. So
+        this submits a new credit record whose `scoreImpact` reflects the
+        change from `previous_score` (bounded to the contract's +/-50
+        per-record limit), and whose `dataHash` lets the exact off-chain
+        score that produced this record be verified later.
+
+        The account authenticated by BLOCKCHAIN_FROM_ADDRESS /
+        BLOCKCHAIN_PRIVATE_KEY must hold CREDIT_PROVIDER_ROLE on the
+        deployed CreditScoreV2 contract (granted via
+        code/blockchain/scripts/deploy.js) or this call reverts.
+        """
         try:
             if not self.is_connected():
                 raise Exception("Blockchain not connected")
@@ -86,22 +117,46 @@ class BlockchainService:
             contract = self._get_contract_instance(ContractType.CREDIT_SCORE)
             if not contract:
                 raise Exception("Failed to get contract instance")
+
+            max_score_impact = 50
+            if previous_score is not None:
+                score_impact = max(
+                    -max_score_impact, min(max_score_impact, score - previous_score)
+                )
+            else:
+                # No prior score to diff against (first on-chain record
+                # for this user) - log the event without moving the
+                # on-chain score.
+                score_impact = 0
+
+            timestamp = int(datetime.now(timezone.utc).timestamp())
+            data_hash = self.web3.keccak(text=f"{credit_score_id}:{score}:{timestamp}")
+            compliance_flags = json.dumps({"source": "ai_model", "score": score})
             function_data = {
                 "user_address": wallet_address,
                 "score": score,
-                "timestamp": int(datetime.now(timezone.utc).timestamp()),
+                "previous_score": previous_score,
+                "score_impact": score_impact,
+                "timestamp": timestamp,
                 "score_id": credit_score_id,
             }
-            transaction = contract.functions.updateCreditScore(
-                wallet_address, score, function_data["timestamp"], credit_score_id
+            from_address = self.config.get("BLOCKCHAIN_FROM_ADDRESS")
+            transaction = contract.functions.addCreditRecord(
+                wallet_address,
+                0,  # amount: not applicable to a score recalculation event
+                "score_recalculation",
+                score_impact,
+                data_hash,
+                compliance_flags,
+                b"",  # role-based auth (CREDIT_PROVIDER_ROLE) is enough;
+                # see CreditScoreV2.addCreditRecord for why a signature
+                # isn't required for a role-authenticated caller
             ).build_transaction(
                 {
-                    "from": self.config.get("BLOCKCHAIN_FROM_ADDRESS"),
+                    "from": from_address,
                     "gas": self.default_gas_limit,
                     "gasPrice": self.default_gas_price,
-                    "nonce": self.web3.eth.get_transaction_count(
-                        self.config.get("BLOCKCHAIN_FROM_ADDRESS")
-                    ),
+                    "nonce": self.web3.eth.get_transaction_count(from_address),
                 }
             )
             signed_txn = self.web3.eth.account.sign_transaction(
@@ -112,10 +167,10 @@ class BlockchainService:
             blockchain_tx = self._create_blockchain_transaction(
                 transaction_hash=tx_hash_hex,
                 transaction_type=TransactionType.CREDIT_SCORE_UPDATE,
-                from_address=self.config.get("BLOCKCHAIN_FROM_ADDRESS"),
+                from_address=from_address,
                 to_address=contract_address,
                 contract_address=contract_address,
-                function_name="updateCreditScore",
+                function_name="addCreditRecord",
                 input_data=function_data,
                 user_id=user_id,
                 related_entity_type="credit_score",
@@ -137,99 +192,116 @@ class BlockchainService:
         self,
         loan_id: str,
         borrower_address: str,
+        transaction_hash: str,
         loan_amount: Decimal,
-        interest_rate: float,
         term_months: int,
+        interest_rate: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Submit loan agreement to blockchain"""
+        """Record a borrower-submitted on-chain loan application.
+
+        `LoanContractV2.submitLoanApplication` requires the applicant to
+        be `msg.sender` and to have personally produced the EIP-712
+        signature over their own application (see
+        code/blockchain/contracts/LoanContractV2.sol) - a backend
+        service wallet can never satisfy that check on a user's behalf,
+        the same way it can't produce someone else's signature anywhere
+        else in this contract suite. So the application transaction
+        itself must be submitted client-side, from the borrower's own
+        connected wallet (e.g. via
+        web-frontend/src/contexts/Web3Context.js), not relayed through
+        this service.
+
+        This method instead records the resulting `transaction_hash`
+        (already broadcast by the borrower's wallet) in the
+        BlockchainTransaction ledger and kicks off status tracking for
+        it, the same as any other tracked transaction.
+
+        `interest_rate` is optional since a loan *application* (which is
+        all `submitLoanApplication` records - see
+        `LoanContractV2.underwriteLoan` for where a rate actually gets
+        set) may only carry the applicant's requested rate, not an
+        approved one.
+        """
         try:
-            if not self.is_connected():
-                raise Exception("Blockchain not connected")
-            contract = self._get_contract_instance(ContractType.LOAN_AGREEMENT)
-            if not contract:
-                raise Exception("Loan agreement contract not available")
-            loan_amount_wei = int(loan_amount * 10**18)
+            contract_address = self.contract_addresses.get(ContractType.LOAN_AGREEMENT)
             function_data = {
                 "loan_id": loan_id,
                 "borrower": borrower_address,
                 "amount": str(loan_amount),
                 "interest_rate": interest_rate,
                 "term_months": term_months,
-                "created_at": int(datetime.now(timezone.utc).timestamp()),
+                "recorded_at": int(datetime.now(timezone.utc).timestamp()),
             }
-            transaction = contract.functions.createLoanAgreement(
-                loan_id,
-                borrower_address,
-                loan_amount_wei,
-                int(interest_rate * 100),
-                term_months,
-            ).build_transaction(
-                {
-                    "from": self.config.get("BLOCKCHAIN_FROM_ADDRESS"),
-                    "gas": self.default_gas_limit,
-                    "gasPrice": self.default_gas_price,
-                    "nonce": self.web3.eth.get_transaction_count(
-                        self.config.get("BLOCKCHAIN_FROM_ADDRESS")
-                    ),
-                }
-            )
-            signed_txn = self.web3.eth.account.sign_transaction(
-                transaction, private_key=self.config.get("BLOCKCHAIN_PRIVATE_KEY")
-            )
-            tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-            tx_hash_hex = tx_hash.hex()
             blockchain_tx = self._create_blockchain_transaction(
-                transaction_hash=tx_hash_hex,
+                transaction_hash=transaction_hash,
                 transaction_type=TransactionType.LOAN_APPLICATION,
-                from_address=self.config.get("BLOCKCHAIN_FROM_ADDRESS"),
-                to_address=self.contract_addresses.get(ContractType.LOAN_AGREEMENT),
-                contract_address=self.contract_addresses.get(
-                    ContractType.LOAN_AGREEMENT
-                ),
-                function_name="createLoanAgreement",
+                from_address=borrower_address,
+                to_address=contract_address,
+                contract_address=contract_address,
+                function_name="submitLoanApplication",
                 input_data=function_data,
                 related_entity_type="loan",
                 related_entity_id=loan_id,
-                gas_limit=self.default_gas_limit,
-                gas_price=self.default_gas_price,
-                value=0,
             )
+            # If it's already confirmed by the time we hear about it, pick
+            # that up now; otherwise monitor_pending_transactions() will
+            # catch up on it later.
+            if self.is_connected():
+                self.update_transaction_status(blockchain_tx.id)
             return {
                 "transaction_id": blockchain_tx.id,
-                "transaction_hash": tx_hash_hex,
-                "status": "submitted",
+                "transaction_hash": transaction_hash,
+                "status": "tracking",
             }
         except Exception as e:
-            self.logger.error(f"Loan agreement submission failed: {e}")
+            self.logger.error(f"Loan agreement recording failed: {e}")
             raise e
 
     def record_payment(
-        self, loan_id: str, payment_amount: Decimal, borrower_address: str
+        self,
+        loan_id: str,
+        payment_amount: Decimal,
+        borrower_address: str,
+        payment_method: str = "bank_transfer",
     ) -> Dict[str, Any]:
-        """Record loan payment on blockchain"""
+        """Settle a loan payment on-chain via LoanContractV2.makePayment.
+
+        Unlike loan applications, `makePayment` isn't tied to a specific
+        caller identity - it pulls `payment_amount` of the lending token
+        from whichever address calls it (see
+        code/blockchain/contracts/LoanContractV2.sol), rather than
+        requiring `msg.sender` to be the loan's borrower. That makes it
+        safe for the platform's own settlement wallet
+        (BLOCKCHAIN_FROM_ADDRESS) to call directly in order to mirror a
+        payment collected through another rail (e.g. ACH/bank transfer)
+        on-chain. BLOCKCHAIN_FROM_ADDRESS must hold, and have approved
+        LoanContractV2 to pull, enough of the lending token to cover
+        `payment_amount`.
+        """
         try:
             if not self.is_connected():
                 raise Exception("Blockchain not connected")
-            contract = self._get_contract_instance(ContractType.PAYMENT_PROCESSOR)
+            contract = self._get_contract_instance(ContractType.LOAN_AGREEMENT)
             if not contract:
-                raise Exception("Payment processor contract not available")
+                raise Exception("Loan contract not available")
+            loan_id_int = int(loan_id)
             payment_amount_wei = int(payment_amount * 10**18)
             function_data = {
-                "loan_id": loan_id,
+                "loan_id": loan_id_int,
                 "borrower": borrower_address,
                 "amount": str(payment_amount),
+                "payment_method": payment_method,
                 "payment_date": int(datetime.now(timezone.utc).timestamp()),
             }
-            transaction = contract.functions.recordPayment(
-                loan_id, borrower_address, payment_amount_wei
+            from_address = self.config.get("BLOCKCHAIN_FROM_ADDRESS")
+            transaction = contract.functions.makePayment(
+                loan_id_int, payment_amount_wei, payment_method
             ).build_transaction(
                 {
-                    "from": self.config.get("BLOCKCHAIN_FROM_ADDRESS"),
+                    "from": from_address,
                     "gas": self.default_gas_limit,
                     "gasPrice": self.default_gas_price,
-                    "nonce": self.web3.eth.get_transaction_count(
-                        self.config.get("BLOCKCHAIN_FROM_ADDRESS")
-                    ),
+                    "nonce": self.web3.eth.get_transaction_count(from_address),
                 }
             )
             signed_txn = self.web3.eth.account.sign_transaction(
@@ -237,15 +309,14 @@ class BlockchainService:
             )
             tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
             tx_hash_hex = tx_hash.hex()
+            contract_address = self.contract_addresses.get(ContractType.LOAN_AGREEMENT)
             blockchain_tx = self._create_blockchain_transaction(
                 transaction_hash=tx_hash_hex,
                 transaction_type=TransactionType.PAYMENT_RECORD,
-                from_address=self.config.get("BLOCKCHAIN_FROM_ADDRESS"),
-                to_address=self.contract_addresses.get(ContractType.PAYMENT_PROCESSOR),
-                contract_address=self.contract_addresses.get(
-                    ContractType.PAYMENT_PROCESSOR
-                ),
-                function_name="recordPayment",
+                from_address=from_address,
+                to_address=contract_address,
+                contract_address=contract_address,
+                function_name="makePayment",
                 input_data=function_data,
                 related_entity_type="loan",
                 related_entity_id=loan_id,
@@ -509,6 +580,19 @@ class BlockchainService:
 
     def _load_contract_abis(self) -> Dict[ContractType, List[Dict]]:
         """Load contract ABIs from configuration or files"""
+        # Maps each ContractType to the actual Solidity contract that
+        # implements it in code/blockchain/contracts. CreditScoreV2 and
+        # LoanContractV2 are the primary, actively-used contracts (see
+        # code/blockchain/README.md); GovernanceToken backs the GOVERNANCE
+        # type. IDENTITY_REGISTRY and PAYMENT_PROCESSOR have no
+        # corresponding contract yet, so there's intentionally no entry
+        # for them here.
+        contract_names = {
+            ContractType.CREDIT_SCORE: "CreditScoreV2",
+            ContractType.LOAN_AGREEMENT: "LoanContractV2",
+            ContractType.GOVERNANCE: "GovernanceToken",
+        }
+
         abis = {}
         for contract_type in ContractType:
             abi_key = f"{contract_type.value.upper()}_CONTRACT_ABI"
@@ -521,16 +605,49 @@ class BlockchainService:
                         abis[contract_type] = abi_data
                 except json.JSONDecodeError:
                     self.logger.error(f"Invalid ABI format for {contract_type}")
-            else:
-                try:
-                    abi_file = f"../blockchain/build/contracts/{contract_type.value.title()}.json"
-                    with open(abi_file, "r") as f:
-                        contract_json = json.load(f)
-                        abis[contract_type] = contract_json.get("abi", [])
-                except FileNotFoundError:
-                    self.logger.warning(f"ABI file not found for {contract_type}")
-                except Exception as e:
-                    self.logger.error(f"Error loading ABI for {contract_type}: {e}")
+                continue
+
+            contract_name = contract_names.get(contract_type)
+            if not contract_name:
+                self.logger.info(
+                    f"No contract implements {contract_type.value} yet; "
+                    "skipping ABI load"
+                )
+                continue
+
+            try:
+                # Hardhat (which this project now uses instead of
+                # Truffle) writes compiled artifacts to
+                # artifacts/contracts/<File>.sol/<Contract>.json rather
+                # than Truffle's flat build/contracts/<Contract>.json.
+                #
+                # The path below assumes this process runs with
+                # code/backend as its working directory and
+                # code/blockchain as a sibling on the same filesystem,
+                # which holds for local development but NOT for the
+                # Dockerized backend: docker-compose.yml's backend
+                # service build context is scoped to ./backend alone, so
+                # code/blockchain (and its compiled artifacts) is outside
+                # that image entirely and can never be reached by a
+                # relative path at runtime. Setting CONTRACT_ARTIFACTS_PATH
+                # (e.g. to a directory the artifacts were copied/mounted
+                # into) overrides the relative-path assumption for that
+                # case.
+                artifacts_base = self.config.get("CONTRACT_ARTIFACTS_PATH") or (
+                    "../blockchain/artifacts/contracts"
+                )
+                abi_file = f"{artifacts_base}/{contract_name}.sol/{contract_name}.json"
+                with open(abi_file, "r") as f:
+                    contract_json = json.load(f)
+                    abis[contract_type] = contract_json.get("abi", [])
+            except FileNotFoundError:
+                self.logger.warning(
+                    f"ABI file not found for {contract_type} "
+                    f"(expected {contract_name} artifact - run "
+                    "`npm run compile` in code/blockchain first)"
+                )
+            except Exception as e:
+                self.logger.error(f"Error loading ABI for {contract_type}: {e}")
         return abis
 
     def _get_contract_instance(self, contract_type: ContractType) -> Any:

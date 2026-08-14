@@ -14,5 +14,9 @@ requests>=2.31.0
 redis>=5.0.0
 python-dotenv>=1.0.0
 PyJWT>=2.8.0
+# Required for services/blockchain_service.py. Without this installed,
+# Web3 is None and every on-chain call is silently skipped (is_connected()
+# returns False) rather than actually reaching CreditScoreV2/LoanContractV2.
+web3>=6.15.0
 pytest>=7.4.0
 pytest-cov>=4.1.0

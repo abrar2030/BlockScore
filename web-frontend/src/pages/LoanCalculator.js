@@ -30,7 +30,14 @@ import {
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { Doughnut, Line } from "react-chartjs-2";
-import { applyForLoan, calculateLoan } from "../utils/api";
+import { useWeb3 } from "../contexts/Web3Context";
+import { getLoanContractV2Address } from "../contracts/LoanContractV2";
+import {
+  applyForLoan,
+  calculateLoan,
+  recordLoanApplicationBlockchainTx,
+} from "../utils/api";
+import { submitLoanApplicationOnChain } from "../utils/onChainLoanApplication";
 
 ChartJS.register(
   ArcElement,
@@ -71,6 +78,18 @@ const LoanCalculator = () => {
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState(null);
   const [applySuccess, setApplySuccess] = useState(null);
+  const [submittedApplicationId, setSubmittedApplicationId] = useState(null);
+
+  // On-chain submission (only relevant once an off-chain application
+  // exists to attach a transaction to - see handleSubmitOnChain).
+  const { web3, accounts, error: web3Error } = useWeb3();
+  const [annualIncome, setAnnualIncome] = useState("");
+  const [debtToIncomeRatio, setDebtToIncomeRatio] = useState("");
+  const [employmentStatus, setEmploymentStatus] = useState("employed");
+  const [onChainSubmitting, setOnChainSubmitting] = useState(false);
+  const [onChainError, setOnChainError] = useState(null);
+  const [onChainResult, setOnChainResult] = useState(null);
+  const loanContractV2Address = getLoanContractV2Address();
 
   const calculateLoanEligibility = async () => {
     try {
@@ -101,6 +120,7 @@ const LoanCalculator = () => {
         rate,
         purpose: purpose || undefined,
       });
+      setSubmittedApplicationId(application?.id || null);
       setApplySuccess(
         `Application ${application?.application_number || ""} submitted successfully.`,
       );
@@ -111,6 +131,50 @@ const LoanCalculator = () => {
       );
     } finally {
       setApplying(false);
+    }
+  };
+
+  // Submits the same application directly on LoanContractV2, signed by
+  // the connected wallet - see utils/onChainLoanApplication.js for why
+  // this has to happen client-side rather than through the backend.
+  const handleSubmitOnChain = async () => {
+    if (!submittedApplicationId) return;
+    if (!web3 || accounts.length === 0) {
+      setOnChainError(
+        web3Error || "Connect a wallet to submit this application on-chain.",
+      );
+      return;
+    }
+
+    setOnChainSubmitting(true);
+    setOnChainError(null);
+    try {
+      const { transactionHash } = await submitLoanApplicationOnChain(
+        web3,
+        accounts[0],
+        {
+          amount,
+          termDays: term * 30,
+          purpose: purpose || "",
+          annualIncome,
+          debtToIncomeRatio: Math.round(Number(debtToIncomeRatio) * 100),
+          employmentStatus,
+        },
+      );
+      await recordLoanApplicationBlockchainTx(
+        submittedApplicationId,
+        transactionHash,
+        accounts[0],
+      );
+      setOnChainResult(transactionHash);
+    } catch (err) {
+      setOnChainError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "The on-chain submission failed. Please try again.",
+      );
+    } finally {
+      setOnChainSubmitting(false);
     }
   };
 
@@ -612,6 +676,97 @@ const LoanCalculator = () => {
                       )}
                     </Button>
                   </Box>
+
+                  {submittedApplicationId && loanContractV2Address && (
+                    <Box
+                      sx={{
+                        mt: 3,
+                        p: 2,
+                        borderRadius: 2,
+                        border: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Typography sx={{ fontWeight: 600, mb: 1 }}>
+                        Also record this application on-chain
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                      >
+                        Optional: submit the same application directly to the
+                        LoanContractV2 smart contract, signed by your connected
+                        wallet.
+                      </Typography>
+
+                      <Stack spacing={2}>
+                        <TextField
+                          label="Annual Income (USD)"
+                          type="number"
+                          fullWidth
+                          value={annualIncome}
+                          onChange={(e) => setAnnualIncome(e.target.value)}
+                        />
+                        <TextField
+                          label="Debt-to-Income Ratio (%)"
+                          type="number"
+                          fullWidth
+                          value={debtToIncomeRatio}
+                          onChange={(e) => setDebtToIncomeRatio(e.target.value)}
+                        />
+                        <FormControl fullWidth>
+                          <InputLabel id="employment-status-label">
+                            Employment Status
+                          </InputLabel>
+                          <Select
+                            labelId="employment-status-label"
+                            label="Employment Status"
+                            value={employmentStatus}
+                            onChange={(e) =>
+                              setEmploymentStatus(e.target.value)
+                            }
+                          >
+                            <MenuItem value="employed">Employed</MenuItem>
+                            <MenuItem value="self_employed">
+                              Self-employed
+                            </MenuItem>
+                            <MenuItem value="unemployed">Unemployed</MenuItem>
+                            <MenuItem value="retired">Retired</MenuItem>
+                            <MenuItem value="student">Student</MenuItem>
+                          </Select>
+                        </FormControl>
+
+                        {onChainError && (
+                          <Alert severity="error">{onChainError}</Alert>
+                        )}
+                        {onChainResult && (
+                          <Alert severity="success">
+                            Submitted on-chain. Transaction:{" "}
+                            {onChainResult.slice(0, 10)}...
+                            {onChainResult.slice(-8)}
+                          </Alert>
+                        )}
+
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          onClick={handleSubmitOnChain}
+                          disabled={
+                            onChainSubmitting ||
+                            !annualIncome ||
+                            !debtToIncomeRatio
+                          }
+                        >
+                          {onChainSubmitting ? (
+                            <CircularProgress size={22} color="inherit" />
+                          ) : (
+                            "Submit On-Chain"
+                          )}
+                        </Button>
+                      </Stack>
+                    </Box>
+                  )}
                 </Box>
               )}
             </Card>

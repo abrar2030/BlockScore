@@ -11,7 +11,7 @@ All scripts resolve the project root relative to their own location, so they can
 3. **run_blockscore.sh** - Quick launcher for the backend only, for day-to-day development
 4. **multi_component_build.sh** - Build orchestration for all components
 5. **component_restart.sh** - Selective component restart automation
-6. **smart_contract_deploy.sh** - Smart contract deployment automation (Truffle)
+6. **smart_contract_deploy.sh** - Smart contract deployment automation (Hardhat)
 7. **code_quality_check.sh** - Code quality and linting automation, with reporting
 8. **lint-all.sh** - Linting and auto-fixing across the whole project in one pass
 
@@ -19,13 +19,13 @@ All scripts resolve the project root relative to their own location, so they can
 
 These scripts operate on the project's real components:
 
-| Component    | Path              | Stack                                                                |
-| ------------ | ----------------- | -------------------------------------------------------------------- |
-| `backend`    | `code/backend`    | Python / Flask (no package.json)                                     |
-| `ai`         | `code/ai_models`  | Python (training deps in `training_scripts/requirements.txt`)        |
-| `blockchain` | `code/blockchain` | Solidity, Truffle (see `truffle-config.js`), no local `package.json` |
-| `frontend`   | `web-frontend`    | React (Create React App)                                             |
-| `mobile`     | `mobile-frontend` | React Native (CLI, not Expo)                                         |
+| Component    | Path              | Stack                                                                                                                                     |
+| ------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend`    | `code/backend`    | Python / Flask (primary; also ships a minimal `package.json` for a few standalone Node.js service modules - see `code/backend/config.js`) |
+| `ai`         | `code/ai_models`  | Python (training deps in `training_scripts/requirements.txt`)                                                                             |
+| `blockchain` | `code/blockchain` | Solidity, Hardhat (see `hardhat.config.js` and `package.json`)                                                                            |
+| `frontend`   | `web-frontend`    | React (Vite)                                                                                                                              |
+| `mobile`     | `mobile-frontend` | React Native (CLI, not Expo)                                                                                                              |
 
 The backend and AI models share a single Python virtual environment at
 `<repo root>/venv`, created and populated by these scripts as needed.
@@ -34,9 +34,11 @@ The backend defaults to SQLite for local development and needs no database
 service running. PostgreSQL and Redis are available via Docker Compose
 (`code/docker-compose.yml`) for a fuller local stack.
 
-This project uses **Truffle**, not Hardhat, for smart contracts. A local
-chain is provided by **Ganache** (port 8545, matching the `development`
-network in `truffle-config.js`), not `hardhat node`.
+This project uses **Hardhat**, not Truffle, for smart contracts. A local
+chain is provided by Hardhat's own built-in node (`npx hardhat node`,
+port 8545, matching the `development` network in `hardhat.config.js`) -
+no separate Ganache install needed. Contracts compile fully offline via
+the local `solc` npm package (see `code/blockchain/README.md` for why).
 
 ## Installation
 
@@ -60,7 +62,7 @@ Features:
 
 - Automatic OS detection and system package installation
 - Python (backend + AI models) and Node.js (web-frontend, mobile-frontend) environment setup
-- Blockchain development environment configuration (Truffle + Ganache)
+- Blockchain development environment configuration (Hardhat)
 - Environment variable management
 - Project structure validation
 
@@ -140,7 +142,7 @@ Examples:
 
 ### Smart Contract Deployment
 
-This script automates the deployment of smart contracts to different blockchain networks via Truffle.
+This script automates the deployment of smart contracts to different blockchain networks via Hardhat. It deploys all five contracts (`GovernanceToken`, `CreditScore`, `CreditScoreV2`, `LoanContract`, `LoanContractV2`) and wires up the cross-contract roles they need (e.g. granting `LoanContractV2` `CREDIT_PROVIDER_ROLE` on `CreditScoreV2`) via `code/blockchain/scripts/deploy.js`.
 
 ```bash
 ./scripts/smart_contract_deploy.sh [options]
@@ -150,11 +152,13 @@ Options:
 
 - `-h, --help`: Show help message
 - `-n, --network <network>`: Specify network (development, test, mainnet)
-- `-v, --verify`: Verify contracts on block explorer (requires `truffle-plugin-verify`)
+- `-v, --verify`: Verify contracts on block explorer (requires `@nomicfoundation/hardhat-verify`, bundled in `@nomicfoundation/hardhat-toolbox`)
 - `--no-gas-optimization`: Disable gas optimization
 - `--no-security-check`: Disable security checks
 
-`truffle-config.js` currently only defines the `development` network. Deploying to `test` or `mainnet` requires adding a matching network entry there first (typically via `@truffle/hdwallet-provider`, using the `PROVIDER_URL`/`PRIVATE_KEY` environment variables this script already loads from `code/blockchain/.env.<network>`); the script checks for this and fails with a clear message if the network isn't configured yet.
+`hardhat.config.js` currently only defines the `hardhat` (in-memory) and `development` (127.0.0.1:8545) networks. Deploying to `test` or `mainnet` requires adding a matching network entry there first (typically an RPC url + an account private key, using the `PROVIDER_URL`/`PRIVATE_KEY` environment variables this script already loads from `code/blockchain/.env.<network>`); the script checks for this and fails with a clear message if the network isn't configured yet.
+
+Each deployment writes `code/blockchain/deployments/<network>/addresses.json` and `constructor-args.json` (the latter needed for `--verify`, since block explorer verification re-derives the deployed bytecode from each contract's constructor arguments).
 
 Examples:
 

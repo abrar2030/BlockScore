@@ -142,12 +142,12 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
 
     event EmergencyModeToggled(bool enabled, address indexed admin);
 
-    event ProfileFrozen(
+    event CreditProfileFrozen(
         address indexed user,
         string reason,
         address indexed officer
     );
-    event ProfileUnfrozen(address indexed user, address indexed officer);
+    event CreditProfileUnfrozen(address indexed user, address indexed officer);
 
     // Custom errors for gas efficiency
     error UnauthorizedAccess();
@@ -223,30 +223,37 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
         withinDailyLimit(msg.sender)
     {
         // Validate inputs
-        if (
-            scoreImpact < -int16(MAX_SCORE_IMPACT) ||
-            scoreImpact > int16(MAX_SCORE_IMPACT)
-        ) {
+        int16 maxScoreImpact = int16(int256(MAX_SCORE_IMPACT));
+        if (scoreImpact < -maxScoreImpact || scoreImpact > maxScoreImpact) {
             revert InvalidScoreRange();
         }
 
-        // Verify signature for data integrity
-        bytes32 structHash = keccak256(
-            abi.encode(
-                keccak256(
-                    "CreditRecord(address user,uint256 amount,string recordType,int16 scoreImpact,bytes32 dataHash,uint256 nonce)"
-                ),
-                user,
-                amount,
-                keccak256(bytes(recordType)),
-                scoreImpact,
-                dataHash,
-                userNonces[user]
-            )
-        );
+        // Optionally verify an EIP-712 signature for data integrity. This is
+        // required for EOA providers that choose to self-attest their
+        // submission off-chain; it is skipped (by passing an empty
+        // `signature`) for trusted contract integrations such as
+        // LoanContractV2, which cannot produce ECDSA signatures but are
+        // already authenticated via CREDIT_PROVIDER_ROLE.
+        if (signature.length > 0) {
+            bytes32 structHash = keccak256(
+                abi.encode(
+                    keccak256(
+                        "CreditRecord(address user,uint256 amount,string recordType,int16 scoreImpact,bytes32 dataHash,uint256 nonce)"
+                    ),
+                    user,
+                    amount,
+                    keccak256(bytes(recordType)),
+                    scoreImpact,
+                    dataHash,
+                    userNonces[user]
+                )
+            );
 
-        bytes32 hash = _hashTypedDataV4(structHash);
-        if (hash.recover(signature) != msg.sender) revert InvalidSignature();
+            bytes32 hash = _hashTypedDataV4(structHash);
+            if (hash.recover(signature) != msg.sender) {
+                revert InvalidSignature();
+            }
+        }
 
         // Check for duplicate transactions
         bytes32 txHash = keccak256(
@@ -337,20 +344,24 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
             "Only original provider can mark repaid"
         );
 
-        // Verify signature
-        bytes32 structHash = keccak256(
-            abi.encode(
-                keccak256(
-                    "RepaymentRecord(address user,uint256 recordIndex,uint256 nonce)"
-                ),
-                user,
-                recordIndex,
-                userNonces[user]
-            )
-        );
+        // Optionally verify signature (see addCreditRecord for rationale)
+        if (signature.length > 0) {
+            bytes32 structHash = keccak256(
+                abi.encode(
+                    keccak256(
+                        "RepaymentRecord(address user,uint256 recordIndex,uint256 nonce)"
+                    ),
+                    user,
+                    recordIndex,
+                    userNonces[user]
+                )
+            );
 
-        bytes32 hash = _hashTypedDataV4(structHash);
-        if (hash.recover(signature) != msg.sender) revert InvalidSignature();
+            bytes32 hash = _hashTypedDataV4(structHash);
+            if (hash.recover(signature) != msg.sender) {
+                revert InvalidSignature();
+            }
+        }
 
         record.repaid = true;
         record.repaymentTimestamp = block.timestamp;
@@ -431,7 +442,7 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
         creditProfiles[user].frozen = true;
         complianceViolations[user].push(reason);
 
-        emit ProfileFrozen(user, reason, msg.sender);
+        emit CreditProfileFrozen(user, reason, msg.sender);
         emit ComplianceViolation(
             user,
             "PROFILE_FROZEN",
@@ -447,7 +458,7 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
         address user
     ) external onlyRole(COMPLIANCE_OFFICER_ROLE) {
         creditProfiles[user].frozen = false;
-        emit ProfileUnfrozen(user, msg.sender);
+        emit CreditProfileUnfrozen(user, msg.sender);
     }
 
     /**
@@ -626,13 +637,19 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
     }
 
     /**
-     * @dev Calculates repayment bonus based on timing
+     * @dev Calculates repayment bonus based on how quickly the record was repaid
      */
     function _calculateRepaymentBonus(
         CreditRecord memory record
-    ) internal pure returns (int16) {
-        // This is a simplified calculation - in production, you'd have more sophisticated logic
-        return 10; // Base repayment bonus
+    ) internal view returns (int16) {
+        uint256 elapsed = block.timestamp - record.timestamp;
+        if (elapsed <= 30 days) {
+            return 15; // Repaid quickly
+        } else if (elapsed <= 90 days) {
+            return 10; // Standard repayment bonus
+        } else {
+            return 5; // Repaid slowly, but still repaid
+        }
     }
 
     /**
@@ -643,6 +660,17 @@ contract CreditScoreV2 is ReentrancyGuard, Pausable, AccessControl, EIP712 {
         uint256 amount,
         string memory recordType
     ) internal {
+        // Flag defaults for mandatory compliance review
+        if (keccak256(bytes(recordType)) == keccak256(bytes("loan_default"))) {
+            complianceViolations[user].push("LOAN_DEFAULT_RECORDED");
+            emit ComplianceViolation(
+                user,
+                "LOAN_DEFAULT_RECORDED",
+                "A loan default was recorded for this user",
+                block.timestamp
+            );
+        }
+
         // Check for suspicious patterns
         if (amount > 1000000 * 10 ** 18) {
             // Very large amount

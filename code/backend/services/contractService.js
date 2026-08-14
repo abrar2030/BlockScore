@@ -3,13 +3,32 @@
  * Handles interaction with Ethereum smart contracts
  */
 const { Web3 } = require("web3");
-const config = require("./config");
+const path = require("path");
+const config = require("../config");
 
 // Contract ABIs
-const CreditScoreABI =
-  require("../blockchain/build/contracts/CreditScore.json").abi;
-const LoanContractABI =
-  require("../blockchain/build/contracts/LoanContract.json").abi;
+//
+// Hardhat (which this project now uses instead of Truffle) writes compiled
+// artifacts to artifacts/contracts/<File>.sol/<Contract>.json rather than
+// Truffle's flat build/contracts/<Contract>.json. Run `npm run compile`
+// inside code/blockchain (or `npm test`, which compiles automatically)
+// before starting this service so these files exist.
+//
+// The path below assumes code/blockchain is a sibling of code/backend on
+// the same filesystem, which holds for local development but NOT for a
+// Dockerized backend: docker-compose.yml's backend build context is
+// scoped to ./backend alone, so code/blockchain never ends up in that
+// image. Setting CONTRACT_ARTIFACTS_PATH (e.g. to wherever the compiled
+// artifacts were copied/mounted into the container) overrides this.
+const artifactsBase =
+  process.env.CONTRACT_ARTIFACTS_PATH ||
+  path.join(__dirname, "..", "..", "blockchain", "artifacts", "contracts");
+const CreditScoreABI = require(
+  path.join(artifactsBase, "CreditScore.sol", "CreditScore.json"),
+).abi;
+const LoanContractABI = require(
+  path.join(artifactsBase, "LoanContract.sol", "LoanContract.json"),
+).abi;
 
 class ContractService {
   constructor() {

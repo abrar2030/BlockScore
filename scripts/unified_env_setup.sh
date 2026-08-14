@@ -10,7 +10,7 @@
 # - Automatic OS detection and system package installation
 # - Python (backend + AI models), Node.js (web-frontend, mobile-frontend)
 #   environment setup
-# - Blockchain development environment configuration (Truffle + Ganache)
+# - Blockchain development environment configuration (Hardhat)
 # - Environment variable management
 # - Project structure validation
 #
@@ -193,7 +193,7 @@ setup_node_environment() {
     echo -e "${GREEN}Installed Node.js $NODE_VERSION${NC}"
   fi
 
-  # Install web-frontend dependencies (React, via Create React App)
+  # Install web-frontend dependencies (React, via Vite)
   if [ -d "${PROJECT_DIR}/web-frontend" ]; then
     echo -e "${YELLOW}Installing web-frontend dependencies...${NC}"
     (
@@ -238,34 +238,30 @@ setup_datastores() {
   fi
 }
 
-# Function to setup the Truffle/Ganache blockchain development environment.
-# This project uses Truffle (see code/blockchain/truffle-config.js), not
-# Hardhat.
+# Function to set up the Hardhat blockchain development environment.
+# This project uses Hardhat (see code/blockchain/hardhat.config.js), with
+# contracts compiled fully offline via the local `solc` npm package - no
+# global Truffle/Ganache installation, and no network access to
+# binaries.soliditylang.org, is needed or used.
 setup_blockchain_environment() {
   echo -e "${BLUE}Setting up blockchain development environment...${NC}"
 
   if ! command_exists npm; then
-    echo -e "${YELLOW}npm not found; skipping Truffle/Ganache installation.${NC}"
+    echo -e "${YELLOW}npm not found; skipping blockchain dependency installation.${NC}"
     return 0
   fi
 
-  if command_exists truffle; then
-    echo -e "${GREEN}Found Truffle $(truffle version 2>/dev/null | head -n 1)${NC}"
+  if [ -d "${PROJECT_DIR}/code/blockchain/node_modules" ]; then
+    echo -e "${GREEN}Blockchain dependencies already installed.${NC}"
   else
-    echo -e "${YELLOW}Installing Truffle...${NC}"
-    npm install -g truffle
-  fi
-
-  if command_exists ganache || command_exists ganache-cli; then
-    echo -e "${GREEN}Found Ganache.${NC}"
-  else
-    echo -e "${YELLOW}Installing Ganache...${NC}"
-    npm install -g ganache
+    echo -e "${YELLOW}Installing blockchain dependencies (Hardhat, OpenZeppelin, solc)...${NC}"
+    (cd "${PROJECT_DIR}/code/blockchain" && npm install)
   fi
 
   echo -e "${GREEN}Blockchain development environment setup complete.${NC}"
-  echo -e "${GREEN}Compile contracts with: (cd ${PROJECT_DIR}/code/blockchain && npx truffle compile)${NC}"
-  echo -e "${GREEN}Start a local chain with: ganache --port 8545${NC}"
+  echo -e "${GREEN}Compile contracts with: (cd ${PROJECT_DIR}/code/blockchain && npm run compile)${NC}"
+  echo -e "${GREEN}Run contract tests with: (cd ${PROJECT_DIR}/code/blockchain && npm test)${NC}"
+  echo -e "${GREEN}Start a local chain with: (cd ${PROJECT_DIR}/code/blockchain && npx hardhat node)${NC}"
 }
 
 # Function to validate project structure
@@ -309,13 +305,13 @@ setup_environment_variables() {
 export BLOCKSCORE_API_PORT=5000
 export BLOCKSCORE_API_URL="http://localhost:5000"
 
-# Web Frontend Configuration (Create React App default port)
+# Web Frontend Configuration (Vite dev server, configured for CRA's default port 3000 - see web-frontend/vite.config.js)
 export BLOCKSCORE_FRONTEND_PORT=3000
 
 # AI Model Server Configuration (see code/ai_models)
 export BLOCKSCORE_AI_MODEL_PORT=5001
 
-# Blockchain Configuration (Truffle; see code/blockchain/truffle-config.js)
+# Blockchain Configuration (Hardhat; see code/blockchain/hardhat.config.js)
 export BLOCKSCORE_NETWORK="development"
 export BLOCKSCORE_PROVIDER_URL="http://localhost:8545"
 export BLOCKSCORE_PRIVATE_KEY="" # Add your private key for non-development deployments

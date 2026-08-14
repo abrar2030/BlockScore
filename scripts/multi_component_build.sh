@@ -13,8 +13,8 @@
 #
 # Components map to real project directories as follows:
 #   backend    -> code/backend       (Python/Flask; "build" = install deps)
-#   blockchain -> code/blockchain    (Truffle; "build" = compile contracts)
-#   frontend   -> web-frontend       (Create React App; "build" = npm run build)
+#   blockchain -> code/blockchain    (Hardhat; "build" = compile contracts)
+#   frontend   -> web-frontend       (Vite; "build" = npm run build)
 #   mobile     -> mobile-frontend    (React Native; "build" = install + typecheck + test,
 #                                      since there is no universal RN build command)
 #   ai         -> code/ai_models     (Python; "build" = install training deps)
@@ -59,9 +59,9 @@ print_usage() {
   echo ""
   echo "Components:"
   echo "  all                        Build all components (default)"
-  echo "  blockchain                 Compile blockchain contracts (Truffle)"
+  echo "  blockchain                 Compile blockchain contracts (Hardhat)"
   echo "  backend                    Install backend dependencies (Python/Flask)"
-  echo "  frontend                   Build the web frontend (Create React App)"
+  echo "  frontend                   Build the web frontend (Vite)"
   echo "  mobile                     Install, typecheck, and test the mobile app"
   echo "  ai                         Install AI model training dependencies"
   echo ""
@@ -237,10 +237,13 @@ build_component() {
     blockchain)
       if [ -d "${PROJECT_DIR}/code/blockchain" ]; then
         cd "${PROJECT_DIR}/code/blockchain"
+        if [ ! -d "node_modules" ] && command -v npm &> /dev/null; then
+          npm install
+        fi
         if command -v npx &> /dev/null; then
-          npx --yes truffle compile || build_status=$?
+          npx hardhat compile || build_status=$?
         else
-          log_message "ERROR" "npx not found; cannot run Truffle. Install Node.js and Truffle."
+          log_message "ERROR" "npx not found; cannot run Hardhat. Install Node.js."
           build_status=1
         fi
       else

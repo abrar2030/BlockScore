@@ -1,6 +1,19 @@
 {
+  "name": "blockscore-blockchain",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "clean": "hardhat clean",
+    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
+    "node": "hardhat node"
+  },
   "devDependencies": {
-    "solc": "^0.8.0"
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "chai": "^4.5.0",
+    "hardhat": "^2.29.0",
+    "mocha": "^11.8.0",
+    "solc": "^0.8.20"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.6"

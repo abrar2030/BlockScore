@@ -24,6 +24,33 @@ except ImportError:
 celery_app = Celery("blockscore_jobs") if _CELERY_AVAILABLE else None
 
 
+def _blockchain_service_config() -> Dict[str, Any]:
+    """Build a dict-like config for BlockchainService.
+
+    The blockchain tasks below are plain Celery tasks, not Flask request
+    handlers, so they don't have access to `app.config`. BlockchainService
+    only needs `.get(key)`, so this reconstructs an equivalent dict
+    straight from the same Config class Flask itself loads
+    (`config.get_config()`), picking up every BLOCKCHAIN_*/*_CONTRACT_ADDRESS
+    setting automatically instead of hardcoding a subset here.
+    """
+    try:
+        from config import get_config
+
+        config_class = get_config()
+        return {
+            key: getattr(config_class, key)
+            for key in dir(config_class)
+            if key.isupper() and not key.startswith("_")
+        }
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Could not load app config for background blockchain task; "
+            "falling back to an empty config"
+        )
+        return {}
+
+
 class JobManager:
     """Background job manager using Celery"""
 
@@ -364,7 +391,7 @@ if celery_app is not None:
         try:
             from services.blockchain_service import BlockchainService
 
-            blockchain_service = BlockchainService({})
+            blockchain_service = BlockchainService(_blockchain_service_config())
             result = blockchain_service.monitor_pending_transactions()
             return result
         except Exception as exc:
@@ -380,7 +407,7 @@ if celery_app is not None:
         try:
             from services.blockchain_service import BlockchainService
 
-            blockchain_service = BlockchainService({})
+            blockchain_service = BlockchainService(_blockchain_service_config())
             if transaction_type == "credit_score_update":
                 result = blockchain_service.submit_credit_score_update(
                     **transaction_data

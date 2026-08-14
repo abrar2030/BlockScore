@@ -106,6 +106,14 @@ class CreditScoringService:
                 overall_score = self._calculate_overall_score(factors)
                 confidence = 0.85
 
+            # Capture the previous score now, before we create and commit
+            # the new one below - otherwise a later lookup would just
+            # find the record we're about to create (always a zero delta).
+            previous_score_record = self._get_recent_valid_score(user_id)
+            previous_score_value = (
+                previous_score_record.score if previous_score_record else None
+            )
+
             credit_score = self._create_credit_score_record(
                 user_id=user_id,
                 score=overall_score,
@@ -130,7 +138,11 @@ class CreditScoringService:
             if wallet_address and self.blockchain_service:
                 try:
                     bc_result = self.blockchain_service.submit_credit_score_update(
-                        wallet_address, overall_score, user_id
+                        user_id=user_id,
+                        credit_score_id=credit_score.id,
+                        score=overall_score,
+                        wallet_address=wallet_address,
+                        previous_score=previous_score_value,
                     )
                     result["blockchain_transaction"] = bc_result
                 except Exception as bc_err:

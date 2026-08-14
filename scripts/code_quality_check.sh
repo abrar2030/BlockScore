@@ -224,7 +224,7 @@ check_js_ts_files() {
       echo ""
     } >> "$REPORT_FILE"
 
-    # --- web-frontend (Create React App) ---
+    # --- web-frontend (Vite) ---
     if [ -d "${PROJECT_DIR}/web-frontend" ]; then
       cd "${PROJECT_DIR}/web-frontend"
 
@@ -402,8 +402,9 @@ check_python_files() {
 }
 
 # Ensure code/blockchain has a package.json for devDependency installs
-# (e.g. solhint); the directory ships without one since contracts are
-# compiled via a globally available truffle.
+# (e.g. solhint). code/blockchain now ships its own package.json
+# (Hardhat, OpenZeppelin, solc), so this is a defensive fallback rather
+# than the normal path.
 ensure_blockchain_package_json() {
   cd "${PROJECT_DIR}/code/blockchain"
   if [ ! -f "package.json" ]; then

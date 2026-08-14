@@ -34,6 +34,43 @@ class Config:
     BLOCKCHAIN_PROVIDER_URL = os.getenv(
         "BLOCKCHAIN_PROVIDER_URL", "http://localhost:8545"
     )
+    # Network the configured provider points at. 1337 matches the chainId
+    # used by code/blockchain/hardhat.config.js for local development.
+    BLOCKCHAIN_NETWORK_ID = int(os.getenv("BLOCKCHAIN_NETWORK_ID", 1337))
+    BLOCKCHAIN_NETWORK_NAME = os.getenv("BLOCKCHAIN_NETWORK_NAME", "development")
+    # Address/key BlockchainService signs and sends transactions with. This
+    # account must hold CREDIT_PROVIDER_ROLE on CreditScoreV2 (see
+    # code/blockchain/scripts/deploy.js) for submit_credit_score_update and
+    # record_payment to succeed.
+    BLOCKCHAIN_FROM_ADDRESS = os.getenv("BLOCKCHAIN_FROM_ADDRESS", "")
+    BLOCKCHAIN_PRIVATE_KEY = os.getenv("BLOCKCHAIN_PRIVATE_KEY", "")
+    # Per-contract deployment addresses, printed by
+    # code/blockchain/scripts/deploy.js after a deployment.
+    CREDIT_SCORE_CONTRACT_ADDRESS = os.getenv("CREDIT_SCORE_CONTRACT_ADDRESS", "")
+    LOAN_AGREEMENT_CONTRACT_ADDRESS = os.getenv(
+        "LOAN_AGREEMENT_CONTRACT_ADDRESS", ""
+    )
+    GOVERNANCE_CONTRACT_ADDRESS = os.getenv("GOVERNANCE_CONTRACT_ADDRESS", "")
+    # Overrides the default "../blockchain/artifacts/contracts" relative
+    # path used to load compiled contract ABIs. Needed for any deployment
+    # where code/blockchain isn't a sibling directory on the same
+    # filesystem as this process - e.g. the Dockerized backend, whose
+    # build context (code/backend) doesn't include code/blockchain at
+    # all. Point this at wherever the compiled artifacts/contracts/
+    # directory was copied or mounted into.
+    CONTRACT_ARTIFACTS_PATH = os.getenv("CONTRACT_ARTIFACTS_PATH", "")
+    # No IdentityRegistry or PaymentProcessor contract exists in
+    # code/blockchain/contracts yet. These are reserved for when/if those
+    # contracts are added; BlockchainService logs (rather than errors) when
+    # it finds them unconfigured.
+    IDENTITY_REGISTRY_CONTRACT_ADDRESS = os.getenv(
+        "IDENTITY_REGISTRY_CONTRACT_ADDRESS", ""
+    )
+    PAYMENT_PROCESSOR_CONTRACT_ADDRESS = os.getenv(
+        "PAYMENT_PROCESSOR_CONTRACT_ADDRESS", ""
+    )
+    # Generic/legacy single-contract settings, kept for backwards
+    # compatibility with anything still reading them directly.
     CONTRACT_ADDRESS = os.getenv(
         "CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000000"
     )

@@ -83,8 +83,8 @@ BlockScore/
 
 - **Blockchain**: Ethereum, Polygon
 - **Smart Contract Language**: Solidity
-- **Development Framework**: Hardhat, Truffle
-- **Testing**: Waffle, Chai
+- **Development Framework**: Hardhat
+- **Testing**: Hardhat/Mocha/Chai
 - **Libraries**: OpenZeppelin, Chainlink
 
 ### Backend
@@ -206,7 +206,7 @@ BlockScore/
 - Node.js (v16+)
 - Python 3.8+
 - MongoDB
-- Ethereum development environment (Truffle/Hardhat)
+- Ethereum development environment (Hardhat)
 
 ### Quick Start with Setup Script
 
@@ -319,23 +319,16 @@ python -m pytest
 
 ## CI/CD Pipeline
 
-BlockScore uses GitHub Actions for continuous integration and deployment:
+BlockScore uses GitHub Actions (`.github/workflows/cicd.yml`) for continuous integration, running on every `push`/`pull_request` to `main`/`develop`, plus on-demand via `workflow_dispatch`. Four jobs run per pipeline execution; `code_quality` gates the other three, which then run in parallel:
 
-| Stage                | Control Area                    | Institutional-Grade Detail                                                              |
-| :------------------- | :------------------------------ | :-------------------------------------------------------------------------------------- |
-| **Formatting Check** | Change Triggers                 | Enforced on all `push` and `pull_request` events to `main` and `develop`                |
-|                      | Manual Oversight                | On-demand execution via controlled `workflow_dispatch`                                  |
-|                      | Source Integrity                | Full repository checkout with complete Git history for auditability                     |
-|                      | Python Runtime Standardization  | Python 3.10 with deterministic dependency caching                                       |
-|                      | Backend Code Hygiene            | `autoflake` to detect unused imports/variables using non-mutating diff-based validation |
-|                      | Backend Style Compliance        | `black --check` to enforce institutional formatting standards                           |
-|                      | Non-Intrusive Validation        | Temporary workspace comparison to prevent unauthorized source modification              |
-|                      | Node.js Runtime Control         | Node.js 18 with locked dependency installation via `npm ci`                             |
-|                      | Web Frontend Formatting Control | Prettier checks for web-facing assets                                                   |
-|                      | Mobile Frontend Formatting      | Prettier enforcement for mobile application codebases                                   |
-|                      | Documentation Governance        | Repository-wide Markdown formatting enforcement                                         |
-|                      | Infrastructure Configuration    | Prettier validation for YAML/YML infrastructure definitions                             |
-|                      | Compliance Gate                 | Any formatting deviation fails the pipeline and blocks merge                            |
+| Job                               | Depends On   | Runtime              | What It Does                                                                                                                                                       |
+| :-------------------------------- | :----------- | :------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Code Quality Checks**           | -            | Python 3.11, Node 20 | `autoflake`/`black --check` on the whole repo; repo-wide Prettier `--check` (via `prettier-plugin-solidity`) across JS/TS/JSON/HTML/CSS/Markdown/**Solidity**/YAML |
+| **Backend Tests**                 | Code Quality | Python 3.11          | `pytest` against `code/backend/tests/` with coverage, uploaded as the `backend-coverage-report` artifact                                                           |
+| **Smart Contract Compile & Test** | Code Quality | Node 20 (Hardhat)    | `npm ci` + `npm run compile` + `npm test` in `code/blockchain` (53 tests across all 5 contracts); compiled ABIs uploaded as the `blockchain-artifacts` artifact    |
+| **Frontend Build**                | Code Quality | Node 20 (Vite)       | `npm ci --legacy-peer-deps` + `npm run build` in `web-frontend`, uploaded as the `frontend-dist` artifact                                                          |
+
+The Code Quality job's Prettier check already covers Solidity _formatting_ (via `prettier-plugin-solidity`); the Smart Contract Compile & Test job covers actual _compilation_ and _correctness_ (the full Hardhat test suite), which formatting alone can't catch.
 
 ## Documentation
 

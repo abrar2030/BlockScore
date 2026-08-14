@@ -137,6 +137,30 @@ export const applyForLoan = async ({
   }
 };
 
+// Link an on-chain transaction (already broadcast by the borrower's own
+// wallet - see utils/onChainLoanApplication.js) to an existing loan
+// application, so it's tracked in the backend's BlockchainTransaction
+// ledger.
+export const recordLoanApplicationBlockchainTx = async (
+  applicationId,
+  transactionHash,
+  walletAddress,
+) => {
+  try {
+    const response = await api.post(
+      `/loans/applications/${applicationId}/blockchain`,
+      {
+        transaction_hash: transactionHash,
+        wallet_address: walletAddress,
+      },
+    );
+    return response.data.data || response.data;
+  } catch (error) {
+    console.error("Error recording on-chain loan transaction:", error);
+    throw error;
+  }
+};
+
 // List the current user's submitted loan applications (paginated)
 export const getLoanApplications = async (page = 1, perPage = 20) => {
   try {

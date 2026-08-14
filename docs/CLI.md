@@ -171,20 +171,20 @@ Comprehensive code quality analysis.
 
 ## Smart Contract Commands
 
-### Truffle Commands
+### Hardhat Commands
 
-**Compile contracts**:
+**Compile contracts** (fully offline, via the local `solc` npm package):
 
 ```bash
 cd code/blockchain
-truffle compile
+npm run compile
 ```
 
 **Run tests**:
 
 ```bash
 cd code/blockchain
-truffle test
+npm test
 ```
 
 **Deploy contracts**:
@@ -192,31 +192,32 @@ truffle test
 ```bash
 cd code/blockchain
 
-# Local development
-truffle migrate --network development
+# Local development (deploys all 5 contracts and wires up their roles)
+npm run deploy:local
+# equivalent to: npx hardhat run scripts/deploy.js --network development
 
-# Mumbai testnet
-truffle migrate --network mumbai
-
-# Polygon mainnet
-truffle migrate --network polygon
+# A real network - first add a matching entry to hardhat.config.js's
+# networks block (RPC url + account key), then:
+npx hardhat run scripts/deploy.js --network mumbai
+npx hardhat run scripts/deploy.js --network polygon
 ```
 
 **Console**:
 
 ```bash
 cd code/blockchain
-truffle console --network development
+npx hardhat console --network development
 ```
 
 ### Contract Interaction Examples
 
 ```javascript
-// In truffle console
-const CreditScore = await CreditScore.deployed();
+// In hardhat console
+const CreditScore = await ethers.getContractFactory("CreditScore");
+const creditScore = await CreditScore.attach("<deployed address>");
 
 // Add credit record
-await CreditScore.addCreditRecord(
+await creditScore.addCreditRecord(
   "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
   1000,
   "loan",
@@ -360,20 +361,20 @@ python api.py
 
 ## CLI Command Reference Table
 
-| Command                    | Arguments          | Description                   | Example                                      |
-| -------------------------- | ------------------ | ----------------------------- | -------------------------------------------- |
-| `setup_blockscore_env.sh`  | None               | Setup development environment | `./scripts/setup_blockscore_env.sh`          |
-| `run_blockscore.sh`        | None               | Start all services            | `./scripts/run_blockscore.sh`                |
-| `smart_contract_deploy.sh` | `[network]`        | Deploy smart contracts        | `./scripts/smart_contract_deploy.sh testnet` |
-| `component_restart.sh`     | `[component]`      | Restart specific component    | `./scripts/component_restart.sh backend`     |
-| `lint-all.sh`              | `[--fix]`          | Run code linters              | `./scripts/lint-all.sh --fix`                |
-| `code_quality_check.sh`    | None               | Run quality checks            | `./scripts/code_quality_check.sh`            |
-| `truffle compile`          | None               | Compile Solidity contracts    | `cd code/blockchain && truffle compile`      |
-| `truffle test`             | None               | Run contract tests            | `cd code/blockchain && truffle test`         |
-| `truffle migrate`          | `--network [name]` | Deploy contracts              | `truffle migrate --network mumbai`           |
-| `python app.py`            | None               | Start Flask backend           | `cd code/backend && python app.py`           |
-| `npm start`                | None               | Start React frontend          | `cd web-frontend && npm start`               |
-| `pytest`                   | `[options]`        | Run backend tests             | `cd code/backend && pytest`                  |
+| Command                         | Arguments           | Description                                | Example                                              |
+| ------------------------------- | ------------------- | ------------------------------------------ | ---------------------------------------------------- |
+| `setup_blockscore_env.sh`       | None                | Setup development environment              | `./scripts/setup_blockscore_env.sh`                  |
+| `run_blockscore.sh`             | None                | Start all services                         | `./scripts/run_blockscore.sh`                        |
+| `smart_contract_deploy.sh`      | `-n [network] [-v]` | Deploy smart contracts                     | `./scripts/smart_contract_deploy.sh -n test`         |
+| `component_restart.sh`          | `[component]`       | Restart specific component                 | `./scripts/component_restart.sh backend`             |
+| `lint-all.sh`                   | `[--fix]`           | Run code linters                           | `./scripts/lint-all.sh --fix`                        |
+| `code_quality_check.sh`         | None                | Run quality checks                         | `./scripts/code_quality_check.sh`                    |
+| `hardhat compile`               | None                | Compile Solidity contracts                 | `cd code/blockchain && npm run compile`              |
+| `hardhat test`                  | None                | Run contract tests                         | `cd code/blockchain && npm test`                     |
+| `hardhat run scripts/deploy.js` | `--network [name]`  | Deploy contracts (all 5, with roles wired) | `npx hardhat run scripts/deploy.js --network mumbai` |
+| `python app.py`                 | None                | Start Flask backend                        | `cd code/backend && python app.py`                   |
+| `npm start`                     | None                | Start React frontend                       | `cd web-frontend && npm start`                       |
+| `pytest`                        | `[options]`         | Run backend tests                          | `cd code/backend && pytest`                          |
 
 ## Environment-Specific Commands
 

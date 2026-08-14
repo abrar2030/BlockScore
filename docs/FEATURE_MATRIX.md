@@ -34,14 +34,14 @@ Complete feature list with implementation details and examples.
 
 ## Blockchain Features
 
-| Feature               | Short description      | Module / File                                   | CLI flag / API         | Example (path)                           | Notes                   |
-| --------------------- | ---------------------- | ----------------------------------------------- | ---------------------- | ---------------------------------------- | ----------------------- |
-| Ethereum Integration  | Connect to Ethereum    | `code/backend/services/blockchain_service.py`   | Web3.py                | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Supports Ganache        |
-| Polygon Integration   | Polygon/Mumbai support | `code/backend/services/blockchain_service.py`   | Web3.py                | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Lower gas fees          |
-| Wallet Connect        | MetaMask integration   | `web-frontend/src/`                             | Web3                   | [USAGE.md#wallet](USAGE.md)              | Browser extension       |
-| Contract Deployment   | Deploy smart contracts | `code/blockchain/`                              | `truffle migrate`      | [CLI.md#deploy](CLI.md)                  | Requires network config |
-| On-Chain Verification | Verify credit data     | Contract methods                                | `verifyCreditRecord()` | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Cryptographic proof     |
-| Governance Token      | DAO governance         | `code/blockchain/contracts/GovernanceToken.sol` | ERC20                  | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Platform governance     |
+| Feature               | Short description      | Module / File                                      | CLI flag / API                  | Example (path)                           | Notes                             |
+| --------------------- | ---------------------- | -------------------------------------------------- | ------------------------------- | ---------------------------------------- | --------------------------------- |
+| Ethereum Integration  | Connect to Ethereum    | `code/backend/services/blockchain_service.py`      | Web3.py                         | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Supports a local Hardhat node     |
+| Polygon Integration   | Polygon support        | `code/backend/services/blockchain_service.py`      | Web3.py                         | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Lower gas fees                    |
+| Wallet Connect        | MetaMask integration   | `web-frontend/src/`                                | Web3                            | [USAGE.md#wallet](USAGE.md)              | Browser extension                 |
+| Contract Deployment   | Deploy smart contracts | `code/blockchain/`                                 | `hardhat run scripts/deploy.js` | [CLI.md#deploy](CLI.md)                  | Requires network config           |
+| On-Chain Verification | Verify credit data     | `CreditScoreV2.addCreditRecord` (`dataHash` param) | `getCreditHistory()`            | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Off-chain data integrity via hash |
+| Governance Token      | DAO governance         | `code/blockchain/contracts/GovernanceToken.sol`    | ERC20                           | [SMART_CONTRACTS.md](SMART_CONTRACTS.md) | Platform governance               |
 
 ## Security Features
 

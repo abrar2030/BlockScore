@@ -12,11 +12,11 @@ set -e
 
 # Prerequisites (ensure these are installed and configured):
 # - Python 3.x with venv support
-# - Node.js and npm (for web-frontend and mobile-frontend)
+# - Node.js and npm (for the Hardhat-based blockchain module in
+#   code/blockchain, web-frontend, and mobile-frontend)
 # - Docker and Docker Compose (recommended, for PostgreSQL and Redis; see
 #   code/docker-compose.yml). The backend also works standalone against
 #   SQLite for local development with no extra services running.
-# - Truffle and Ganache (npm i -g truffle ganache) for blockchain work
 
 echo "Starting BlockScore project setup..."
 
@@ -141,7 +141,7 @@ else
     cd "${PROJECT_DIR}"
 fi
 
-# --- Blockchain Setup (Truffle) ---
+# --- Blockchain Setup (Hardhat) ---
 echo ""
 echo "Setting up BlockScore Blockchain environment..."
 BLOCKCHAIN_DIR="${PROJECT_DIR}/code/blockchain"
@@ -149,13 +149,18 @@ BLOCKCHAIN_DIR="${PROJECT_DIR}/code/blockchain"
 if [ ! -d "${BLOCKCHAIN_DIR}" ]; then
     echo "Error: Blockchain directory ${BLOCKCHAIN_DIR} not found."
 else
-    if ! command -v truffle &> /dev/null && ! command -v npx &> /dev/null; then
-        echo "Neither truffle nor npx found. Please install Node.js and Truffle (npm i -g truffle) to work with smart contracts."
+    if ! command -v npm &> /dev/null; then
+        echo "npm not found. Please install Node.js to work with smart contracts."
     else
-        echo "Truffle tooling available. Compile contracts with: (cd ${BLOCKCHAIN_DIR} && npx truffle compile)"
+        if [ ! -d "${BLOCKCHAIN_DIR}/node_modules" ]; then
+            echo "Installing blockchain dependencies (Hardhat, OpenZeppelin, solc)..."
+            (cd "${BLOCKCHAIN_DIR}" && npm install)
+        fi
+        echo "Compile contracts with: (cd ${BLOCKCHAIN_DIR} && npm run compile)"
+        echo "Run contract tests with: (cd ${BLOCKCHAIN_DIR} && npm test)"
     fi
-    echo "This project uses Truffle (see ${BLOCKCHAIN_DIR}/truffle-config.js), not Hardhat."
-    echo "Start a local chain with Ganache (npm i -g ganache) on port 8545, matching the development network config."
+    echo "This project uses Hardhat (see ${BLOCKCHAIN_DIR}/hardhat.config.js)."
+    echo "Start a local chain with: (cd ${BLOCKCHAIN_DIR} && npx hardhat node) on port 8545, matching the development network config."
 fi
 
 # --- General Instructions & Reminders ---
@@ -163,8 +168,7 @@ echo ""
 echo "BlockScore project setup script finished."
 echo "Please ensure all prerequisites are met:"
 echo "  - Python 3.x, pip"
-echo "  - Node.js, npm"
+echo "  - Node.js, npm (also covers Hardhat for smart contract development)"
 echo "  - Docker and Docker Compose (for PostgreSQL and Redis; see code/docker-compose.yml)"
-echo "  - Truffle and Ganache, for smart contract development"
 echo "Review the project's README.md for further instructions on smart contract deployment, running services, and .env configuration."
 echo "The backend defaults to SQLite for local development (see code/backend/.env.example); Docker Compose provides PostgreSQL and Redis for a fuller local stack."
