@@ -1,26 +1,25 @@
 # BlockScore
 
-![CI/CD Status](https://img.shields.io/github/actions/workflow/status/quantsingularity/BlockScore/cicd.yml?branch=main&label=CI/CD&logo=github)
-[![Test Coverage](https://img.shields.io/badge/coverage-76%25-yellow)](https://github.com/quantsingularity/BlockScore/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![CI/CD Status](https://img.shields.io/github/actions/workflow/status/quantsingularity/BlockScore/cicd.yml?branch=main&label=CI%2FCD&logo=github)
 
 ## Blockchain-Based Credit Scoring Platform
 
-BlockScore is an innovative credit scoring platform that leverages blockchain technology and artificial intelligence to create transparent, immutable, and accurate credit profiles for individuals and businesses.
+BlockScore is a credit scoring platform: a Flask backend for auth, credit scoring, loan applications, and blockchain-anchored records, paired with a React web dashboard and a React Native mobile app. Credit scores are computed from a real, multi-factor rule-based engine (payment history, utilization, length of history, credit mix, and more), with an optional trained model that's used when present and falls back to the rule-based engine when it isn't.
 
 <div align="center">
-  <img src="docs/images/homepage.bmp" alt="BlockScore HomePage" width="80%">
+  <img src="docs/images/homepage.bmp" alt="BlockScore HomePage" width="100%">
 </div>
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Project Structure](#project-structure)
-- [Key Features](#key-features)
+- [Feature Status](#feature-status)
 - [Technology Stack](#technology-stack)
 - [Architecture](#architecture)
-- [Development Steps](#development-steps)
 - [Installation and Setup](#installation-and-setup)
+- [Running the Stack](#running-the-stack)
+- [API Surface](#api-surface)
 - [Testing](#testing)
 - [CI/CD Pipeline](#cicd-pipeline)
 - [Documentation](#documentation)
@@ -29,335 +28,222 @@ BlockScore is an innovative credit scoring platform that leverages blockchain te
 
 ## Overview
 
-BlockScore revolutionizes traditional credit scoring by combining blockchain's immutability with AI's predictive power. The platform creates transparent credit profiles that users own and control, while providing lenders with reliable risk assessment tools based on a broader range of financial behaviors.
+BlockScore demonstrates a credit-scoring workflow across a real, runnable codebase. The live Flask backend, Hardhat smart contracts, and both frontends are wired and covered by tests. `code/ai_models` also contains its own separate Flask server for model serving, but the main backend doesn't call it over HTTP; it loads the same trained model file directly from disk instead. A handful of standalone Node.js modules (a web3.js contract service, a JWT auth service) exist in `code/backend` but, per that directory's own `package.json`, aren't wired into any server.
 
 ## Project Structure
 
-The project is organized into several main components:
-
 ```
 BlockScore/
-├── code/                   # Core backend logic, services, and shared utilities
-├── docs/                   # Project documentation
-├── infrastructure/         # DevOps, deployment, and infra-related code
-├── mobile-frontend/        # Mobile application
-├── web-frontend/           # Web dashboard
-├── scripts/                # Automation, setup, and utility scripts
-├── LICENSE                 # License information
-└── README.md               # Project overview and instructions
+├── code/
+│   ├── backend/                # Flask application (the live backend)
+│   │   ├── app.py              # All routes: auth, credit, loans, profile
+│   │   ├── services/           # credit, blockchain, auth, mfa, compliance, audit
+│   │   ├── models/              # SQLAlchemy models
+│   │   ├── utils/                # background_jobs.py (Celery)
+│   │   └── tests/                 # unit and integration test suites
+│   ├── blockchain/               # Hardhat project
+│   │   ├── contracts/            # CreditScore(V2), LoanContract(V2), GovernanceToken
+│   │   └── tests/                 # Hardhat test suite
+│   └── ai_models/                  # Credit-scoring model training and its own Flask
+│                                    # serving API (not called by code/backend)
+├── web-frontend/                    # React (Vite) dashboard
+├── mobile-frontend/                   # React Native app
+├── infrastructure/                     # Docker, Kubernetes, Terraform, Ansible, monitoring
+├── scripts/                             # Setup, run, lint, and deployment scripts
+├── docs/                                 # Documentation (this directory)
+└── README.md
 ```
 
-## Key Features
+## Feature Status
 
-### Blockchain-Based Credit Profiles
+### Application tier (wired and tested)
 
-- **Immutable Credit History**: All credit events are permanently recorded on the blockchain
-- **Self-Sovereign Identity**: Users own and control access to their credit data
-- **Transparent Scoring**: Clear explanation of factors affecting credit scores
-- **Cross-Border Compatibility**: Universal credit profiles that work across jurisdictions
+| Component           | Details                                                                                                                                                                                                                                                                                                                                                         |
+| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API**             | A Flask application with all routes defined directly in `app.py`: health, auth (register, login, logout, refresh), credit (score calculation, history), loans (apply, calculate, list, anchor to blockchain), and profile.                                                                                                                                      |
+| **Auth**            | JWT sessions with bcrypt password hashing, plus a real MFA service. `SECRET_KEY` and `JWT_SECRET_KEY` both fall back to static placeholder values with no check that rejects them in production.                                                                                                                                                                |
+| **Credit scoring**  | A multi-factor rule-based engine computing payment history, credit utilization, length of history, credit mix, new credit, income stability, and debt-to-income factors, combined into a score. If a trained model file (`credit_scoring_model.pkl`) is present, it's loaded and used; otherwise the service falls back to the rule-based engine automatically. |
+| **Background jobs** | A real Celery app (`utils/background_jobs.py`), backed by Redis and run through its own `celery_worker` container in Docker Compose.                                                                                                                                                                                                                            |
+| **Smart contracts** | Hardhat-managed Solidity contracts: `CreditScore` and `CreditScoreV2`, `LoanContract` and `LoanContractV2`, and a `GovernanceToken`, read and written via a genuine web3.py-backed blockchain service.                                                                                                                                                          |
+| **Web dashboard**   | React app (plain JavaScript, Vite, Material-UI, Chart.js) covering the dashboard, credit score, loans, profile, and authentication screens.                                                                                                                                                                                                                     |
+| **Mobile app**      | React Native app (TypeScript) covering Dashboard, Login, Profile, and Register screens, with Redux Toolkit for state, React Navigation, and React Native Elements (`@rneui`) for UI components.                                                                                                                                                                 |
 
-### AI-Powered Risk Assessment
+### Standalone modules (not called by the live backend)
 
-- **Alternative Data Analysis**: Evaluate creditworthiness using non-traditional data points
-- **Behavioral Scoring**: Analyze patterns to predict repayment likelihood
-- **Fraud Detection**: Identify suspicious activities and potential identity theft
-- **Continuous Learning**: Models improve over time as more data is processed
-
-### Decentralized Finance Integration
-
-- **Smart Contract Loans**: Automated lending based on credit scores
-- **DeFi Protocol Compatibility**: Integrate with major DeFi lending platforms
-- **Tokenized Credit Scores**: Represent credit worthiness as verifiable credentials
-- **On-Chain Verification**: Allow third parties to verify credit information without accessing raw data
-
-### User Experience
-
-- **Intuitive Dashboard**: Easy-to-understand credit profile visualization
-- **Score Improvement Recommendations**: Personalized advice to improve credit scores
-- **Privacy Controls**: Granular permissions for data sharing
-- **Real-Time Updates**: Immediate score adjustments as new data is processed
+| Component                         | Details                                                                                                                                                                                                                                                                   |
+| :-------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **AI model training and serving** | `code/ai_models` has its own training script and a separate Flask API for model inference; `code/backend` loads the trained `.pkl` file directly from disk rather than calling this API over HTTP.                                                                        |
+| **Node.js service modules**       | `services/contractService.js` (web3.js), `services/authService.js`, and `middleware/auth.js` in `code/backend` are real, installable modules, but per that directory's own `package.json`, there is no `app.js` or `routes/` directory wiring them into a running server. |
 
 ## Technology Stack
 
-### Blockchain & Smart Contracts
+| Area                | Technology                                                                                             |
+| :------------------ | :----------------------------------------------------------------------------------------------------- |
+| Blockchain          | Solidity, OpenZeppelin, Hardhat                                                                        |
+| Backend API         | Python 3.11+, Flask, Flask-SQLAlchemy, Gunicorn                                                        |
+| Auth                | PyJWT, bcrypt, an in-house MFA service                                                                 |
+| Data layer          | SQLAlchemy 2, PostgreSQL (SQLite for local development), Redis                                         |
+| Background jobs     | Celery                                                                                                 |
+| ML (credit scoring) | scikit-learn, XGBoost, SHAP for explainability; a rule-based fallback when no trained model is present |
+| Web frontend        | React 18, JavaScript, Vite, Material-UI (MUI), Emotion, Chart.js, axios                                |
+| Mobile frontend     | React Native, TypeScript, Redux Toolkit, React Navigation, React Native Elements (`@rneui`)            |
+| Infrastructure      | Docker, Docker Compose, Kubernetes, Terraform, Ansible                                                 |
+| Monitoring          | Prometheus, Grafana                                                                                    |
+| CI/CD               | GitHub Actions                                                                                         |
+| Testing             | pytest (backend), Hardhat (contracts), Vitest (web), Jest (mobile)                                     |
 
-- **Blockchain**: Ethereum, Polygon
-- **Smart Contract Language**: Solidity
-- **Development Framework**: Hardhat
-- **Testing**: Hardhat/Mocha/Chai
-- **Libraries**: OpenZeppelin, Chainlink
-
-### Backend
-
-- **Language**: Node.js, TypeScript
-- **Framework**: Express, NestJS
-- **Database**: MongoDB, PostgreSQL
-- **API Documentation**: Swagger
-- **Authentication**: JWT, OAuth2
-
-### Web Frontend
-
-- **Framework**: React with TypeScript
-- **State Management**: Redux Toolkit
-- **Styling**: Tailwind CSS, Styled Components
-- **Web3 Integration**: ethers.js, web3.js
-- **Data Visualization**: D3.js, Recharts
-
-### Mobile Frontend
-
-- **Framework**: React Native
-- **Navigation**: React Navigation
-- **State Management**: Redux Toolkit
-- **UI Components**: React Native Paper
-
-### AI & Machine Learning
-
-- **Languages**: Python, R
-- **Frameworks**: TensorFlow, PyTorch, scikit-learn
-- **Data Processing**: Pandas, NumPy
-- **Feature Engineering**: Feature-engine, tsfresh
-- **Model Deployment**: MLflow, TensorFlow Serving
-
-### Infrastructure
-
-- **Containerization**: Docker
-- **Orchestration**: Kubernetes
-- **CI/CD**: GitHub Actions
-- **Monitoring**: Prometheus, Grafana
-- **Infrastructure as Code**: Terraform
+`d3` and `web3` are both listed in `web-frontend/package.json` but aren't imported anywhere in the frontend source; Chart.js is what's actually used for charts.
 
 ## Architecture
 
-BlockScore follows a modular architecture with the following components:
-
 ```
-BlockScore/
-├── Smart Contracts
-│   ├── Identity Management
-│   ├── Credit Data Storage
-│   ├── Score Calculation
-│   └── Access Control
-├── Backend Services
-│   ├── API Gateway
-│   ├── User Service
-│   ├── Blockchain Service
-│   ├── AI Service
-│   └── Analytics Service
-├── AI Models
-│   ├── Credit Scoring Model
-│   ├── Fraud Detection Model
-│   ├── Risk Assessment Model
-│   └── Behavioral Analysis Model
-├── Frontend Applications
-│   ├── Web Dashboard
-│   └── Mobile App
-└── Infrastructure
-    ├── Database Cluster
-    ├── Message Queue
-    ├── Cache Layer
-    └── Monitoring Stack
+Clients
+  ├── web-frontend (React)               ── HTTP/JSON ──┐
+  └── mobile-frontend (React Native)     ── HTTP/JSON ──┤
+                                                        ▼
+Backend (Flask, all routes in app.py)
+  ├── Routes    health, auth, credit, loans, profile
+  ├── Services   credit (rule-based + optional trained model), blockchain (web3.py),
+  │              auth, mfa, compliance, audit
+  ├── Background   Celery worker (Redis-backed)
+  └── Data layer     PostgreSQL (SQLAlchemy), SQLite for local dev
+
+Blockchain (Hardhat / Solidity)
+  CreditScore · CreditScoreV2 · LoanContract · LoanContractV2 · GovernanceToken
+
+AI model service (code/ai_models, standalone)
+  Training script + its own Flask serving API; code/backend reads the trained
+  .pkl file directly from disk rather than calling this API
 ```
 
-### Data Flow
-
-1. User financial data is collected (with permission) from various sources
-2. Data is processed, anonymized, and stored on the blockchain
-3. AI models analyze the data to generate credit scores and risk assessments
-4. Users can view their scores and control access to their data
-5. Lenders can request access to scores for lending decisions
-
-### AI Models
-
-- **Machine Learning Algorithms**: Random Forest, XGBoost, and neural networks for credit scoring
-- **Natural Language Processing**: Sentiment analysis of financial communications
-- **Time Series Analysis**: Prediction of future financial behavior
-- **Quantitative Finance Models**: Risk analysis (Value at Risk, Sharpe Ratio)
-
-## Development Steps
-
-1. **Smart Contract Development**
-   - Write and deploy Solidity contracts to handle credit data
-   - Implement secure identity management and access control
-   - Create on-chain credit score calculation mechanisms
-   - Develop oracle integrations for off-chain data
-
-2. **AI Model Training**
-   - Train models on financial datasets for credit scoring
-   - Implement fraud detection algorithms
-   - Develop risk assessment models
-   - Create behavioral analysis systems
-
-3. **API Integration**
-   - Connect the blockchain and AI models via Node.js APIs
-   - Implement secure data exchange protocols
-   - Create endpoints for third-party integrations
-   - Develop webhook notifications for credit events
-
-4. **Frontend Development**
-   - Build a React.js app for users to check and manage credit scores
-   - Create interactive visualizations for credit history
-   - Implement secure authentication and authorization
-   - Develop mobile applications for on-the-go access
+See [docs/architecture.md](docs/architecture.md) for detail.
 
 ## Installation and Setup
 
-### Prerequisites
-
-- Node.js (v16+)
-- Python 3.8+
-- MongoDB
-- Ethereum development environment (Hardhat)
-
-### Quick Start with Setup Script
-
-```bash
-# Clone the repository
-git clone https://github.com/quantsingularity/BlockScore.git
-cd BlockScore
-
-# Run the setup script
-./setup_blockscore_env.sh
-
-# Start the application
-./run_blockscore.sh
-```
-
-### Manual Setup
-
-#### Backend Setup
+Prerequisites: Python 3.11+ and Node.js 18+.
 
 ```bash
 git clone https://github.com/quantsingularity/BlockScore.git
 cd BlockScore
 
-cd code/backend
-npm install
-cp .env.example .env
-# Configure your environment variables
-npm start
-```
-
-#### Frontend Setup
-
-```bash
-cd code/frontend
-npm install
-npm start
-```
-
-#### Smart Contract Deployment
-
-```bash
+# Blockchain
 cd code/blockchain
 npm install
-npx hardhat compile
-npx hardhat deploy --network <network_name>
+
+# Backend
+cd ../backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Web frontend
+cd ../../web-frontend
+npm install
+
+# Mobile frontend
+cd ../mobile-frontend
+npm install
 ```
+
+For an automated setup:
+
+```bash
+git clone https://github.com/quantsingularity/BlockScore.git
+cd BlockScore
+./scripts/setup_blockscore_env.sh
+./scripts/run_blockscore.sh
+```
+
+Full, environment-specific instructions are in [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+## Running the Stack
+
+```bash
+# Full local stack, including Postgres, Redis, the AI model server, and a
+# Celery worker (from code/, Docker required)
+docker compose up -d
+
+# Or run components individually:
+
+# Backend (from code/backend, venv active)
+python app.py                      # serves http://0.0.0.0:5000
+
+# Web dashboard (from web-frontend)
+npm run dev
+
+# Mobile app (from mobile-frontend)
+npm start
+```
+
+See [docs/usage.md](docs/usage.md) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
+## API Surface
+
+Base URL `http://localhost:5000/api`.
+
+| Group   | Highlights                                                                                   |
+| :------ | :------------------------------------------------------------------------------------------- |
+| Health  | `health`                                                                                     |
+| Auth    | `auth/register`, `auth/login`, `auth/logout`, `auth/refresh`                                 |
+| Credit  | `credit/calculate-score`, `credit/history`                                                   |
+| Loans   | `loans/apply`, `loans/calculate`, `loans/applications`, `loans/applications/{id}/blockchain` |
+| Profile | `profile` (get and update)                                                                   |
+
+Full request and response shapes are in [docs/API.md](docs/API.md).
 
 ## Testing
 
-The project maintains comprehensive test coverage across all components to ensure reliability and security.
-
-### Test Coverage
-
-| Component           | Coverage | Status |
-| ------------------- | -------- | ------ |
-| Smart Contracts     | 85%      | ✅     |
-| Backend Services    | 78%      | ✅     |
-| AI Models           | 72%      | ✅     |
-| Frontend Components | 70%      | ✅     |
-| Integration Tests   | 75%      | ✅     |
-| Overall             | 76%      | ✅     |
-
-### Smart Contract Tests
-
-- Unit tests for all contract functions
-- Integration tests for contract interactions
-- Security tests using Slither and Mythril
-- Gas optimization tests
-
-### Backend Tests
-
-- API endpoint tests using Jest
-- Service layer unit tests
-- Database integration tests
-- Authentication and authorization tests
-
-### AI Model Tests
-
-- Model accuracy validation
-- Cross-validation tests
-- Performance benchmarks
-- Data pipeline tests
-
-### Frontend Tests
-
-- Component tests with React Testing Library
-- Integration tests with Cypress
-- End-to-end user flow tests
-- Snapshot tests
-
-### Running Tests
-
 ```bash
-# Smart contract tests
-cd code/blockchain
+# Backend (from code/backend)
+pytest
+
+# Smart contracts (from code/blockchain)
 npx hardhat test
 
-# Backend tests
-cd code/backend
+# Web (from web-frontend)
 npm test
 
-# Frontend tests
-cd code/frontend
+# Mobile (from mobile-frontend)
 npm test
-
-# AI model tests
-cd code/ai_models
-python -m pytest
 ```
+
+The backend suite has 3 unit test files and 1 integration test file. The Hardhat suite has 5 files covering the contracts. The web dashboard has 11 test files (Vitest); the mobile app has 1 (Jest).
 
 ## CI/CD Pipeline
 
-BlockScore uses GitHub Actions (`.github/workflows/cicd.yml`) for continuous integration, running on every `push`/`pull_request` to `main`/`develop`, plus on-demand via `workflow_dispatch`. Four jobs run per pipeline execution; `code_quality` gates the other three, which then run in parallel:
+GitHub Actions (`.github/workflows/cicd.yml`) runs four jobs on push, pull request, and manual dispatch:
 
-| Job                               | Depends On   | Runtime              | What It Does                                                                                                                                                       |
-| :-------------------------------- | :----------- | :------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Code Quality Checks**           | -            | Python 3.11, Node 20 | `autoflake`/`black --check` on the whole repo; repo-wide Prettier `--check` (via `prettier-plugin-solidity`) across JS/TS/JSON/HTML/CSS/Markdown/**Solidity**/YAML |
-| **Backend Tests**                 | Code Quality | Python 3.11          | `pytest` against `code/backend/tests/` with coverage, uploaded as the `backend-coverage-report` artifact                                                           |
-| **Smart Contract Compile & Test** | Code Quality | Node 20 (Hardhat)    | `npm ci` + `npm run compile` + `npm test` in `code/blockchain` (53 tests across all 5 contracts); compiled ABIs uploaded as the `blockchain-artifacts` artifact    |
-| **Frontend Build**                | Code Quality | Node 20 (Vite)       | `npm ci --legacy-peer-deps` + `npm run build` in `web-frontend`, uploaded as the `frontend-dist` artifact                                                          |
+| Job                           | Depends on          | What it does                                                                       |
+| :---------------------------- | :------------------ | :--------------------------------------------------------------------------------- |
+| Code Quality Checks           | -                   | Python formatter checks (autoflake, black) and a repository-wide Prettier check    |
+| Backend Tests                 | Code Quality Checks | Runs the pytest suite with coverage and uploads the coverage report as an artifact |
+| Smart Contract Compile & Test | Code Quality Checks | Compiles the contracts with Hardhat and runs the contract test suite               |
+| Frontend Build                | Code Quality Checks | Installs dependencies and produces the production web build (no test step)         |
 
-The Code Quality job's Prettier check already covers Solidity _formatting_ (via `prettier-plugin-solidity`); the Smart Contract Compile & Test job covers actual _compilation_ and _correctness_ (the full Hardhat test suite), which formatting alone can't catch.
+There is currently no CI job for the mobile app or for `code/ai_models`.
 
 ## Documentation
 
-| Document                    | Path                 | Description                                                            |
-| :-------------------------- | :------------------- | :--------------------------------------------------------------------- |
-| **README**                  | `README.md`          | High-level overview, project scope, and repository entry point         |
-| **Quickstart Guide**        | `QUICKSTART.md`      | Fast-track guide to get the system running with minimal setup          |
-| **Installation Guide**      | `INSTALLATION.md`    | Step-by-step installation and environment setup                        |
-| **Deployment Guide**        | `DEPLOYMENT.md`      | Deployment procedures, environments, and operational considerations    |
-| **API Reference**           | `API.md`             | Detailed documentation for all API endpoints                           |
-| **CLI Reference**           | `CLI.md`             | Command-line interface usage, commands, and examples                   |
-| **User Guide**              | `USAGE.md`           | Comprehensive end-user guide, workflows, and examples                  |
-| **Architecture Overview**   | `ARCHITECTURE.md`    | System architecture, components, and design rationale                  |
-| **Configuration Guide**     | `CONFIGURATION.md`   | Configuration options, environment variables, and tuning               |
-| **Feature Matrix**          | `FEATURE_MATRIX.md`  | Feature coverage, capabilities, and roadmap alignment                  |
-| **Smart Contracts**         | `SMART_CONTRACTS.md` | Smart contract architecture, interfaces, and security considerations   |
-| **Security Guide**          | `SECURITY.md`        | Security model, threat assumptions, and responsible disclosure process |
-| **Contributing Guidelines** | `CONTRIBUTING.md`    | Contribution workflow, coding standards, and PR requirements           |
-| **Troubleshooting**         | `TROUBLESHOOTING.md` | Common issues, diagnostics, and remediation steps                      |
+| Document                                           | Contents                               |
+| :------------------------------------------------- | :------------------------------------- |
+| [docs/README.md](docs/README.md)                   | Documentation index                    |
+| [docs/architecture.md](docs/architecture.md)       | System architecture                    |
+| [docs/API.md](docs/API.md)                         | REST API reference                     |
+| [docs/QUICKSTART.md](docs/QUICKSTART.md)           | Fast-track setup guide                 |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md)       | Setup for all components               |
+| [docs/deployment.md](docs/deployment.md)           | Deployment procedures                  |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md)     | Environment variables and config       |
+| [docs/usage.md](docs/usage.md)                     | Running and using the platform         |
+| [docs/CLI.md](docs/CLI.md)                         | Helper scripts reference               |
+| [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)   | Feature status, implemented vs planned |
+| [docs/SMART_CONTRACTS.md](docs/SMART_CONTRACTS.md) | Contract architecture and interfaces   |
+| [docs/SECURITY.md](docs/SECURITY.md)               | Security model and disclosure process  |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and fixes                |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)       | Contribution guide                     |
+| [docs/examples/](docs/examples/)                   | Worked examples                        |
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## License
 
