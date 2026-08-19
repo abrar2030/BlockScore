@@ -38,19 +38,19 @@ BlockScore/
 │   ├── backend/                # Flask application (the live backend)
 │   │   ├── app.py              # All routes: auth, credit, loans, profile
 │   │   ├── services/           # credit, blockchain, auth, mfa, compliance, audit
-│   │   ├── models/              # SQLAlchemy models
-│   │   ├── utils/                # background_jobs.py (Celery)
-│   │   └── tests/                 # unit and integration test suites
-│   ├── blockchain/               # Hardhat project
-│   │   ├── contracts/            # CreditScore(V2), LoanContract(V2), GovernanceToken
-│   │   └── tests/                 # Hardhat test suite
-│   └── ai_models/                  # Credit-scoring model training and its own Flask
-│                                    # serving API (not called by code/backend)
-├── web-frontend/                    # React (Vite) dashboard
-├── mobile-frontend/                   # React Native app
-├── infrastructure/                     # Docker, Kubernetes, Terraform, Ansible, monitoring
-├── scripts/                             # Setup, run, lint, and deployment scripts
-├── docs/                                 # Documentation (this directory)
+│   │   ├── models/             # SQLAlchemy models
+│   │   ├── utils/              # background_jobs.py (Celery)
+│   │   └── tests/              # unit and integration test suites
+│   ├── blockchain/             # Hardhat project
+│   │   ├── contracts/          # CreditScore(V2), LoanContract(V2), GovernanceToken
+│   │   └── tests/              # Hardhat test suite
+│   └── ai_models/              # Credit-scoring model training and its own Flask
+│                               # serving API (not called by code/backend)
+├── web-frontend/               # React (Vite) dashboard
+├── mobile-frontend/            # React Native app
+├── infrastructure/             # Docker, Kubernetes, Terraform, Ansible, monitoring
+├── scripts/                    # Setup, run, lint, and deployment scripts
+├── docs/                       # Documentation (this directory)
 └── README.md
 ```
 
@@ -91,8 +91,6 @@ BlockScore/
 | Monitoring          | Prometheus, Grafana                                                                                    |
 | CI/CD               | GitHub Actions                                                                                         |
 | Testing             | pytest (backend), Hardhat (contracts), Vitest (web), Jest (mobile)                                     |
-
-`d3` and `web3` are both listed in `web-frontend/package.json` but aren't imported anywhere in the frontend source; Chart.js is what's actually used for charts.
 
 ## Architecture
 
@@ -206,8 +204,6 @@ npm test
 npm test
 ```
 
-The backend suite has 3 unit test files and 1 integration test file. The Hardhat suite has 5 files covering the contracts. The web dashboard has 11 test files (Vitest); the mobile app has 1 (Jest).
-
 ## CI/CD Pipeline
 
 GitHub Actions (`.github/workflows/cicd.yml`) runs four jobs on push, pull request, and manual dispatch:
@@ -218,8 +214,6 @@ GitHub Actions (`.github/workflows/cicd.yml`) runs four jobs on push, pull reque
 | Backend Tests                 | Code Quality Checks | Runs the pytest suite with coverage and uploads the coverage report as an artifact |
 | Smart Contract Compile & Test | Code Quality Checks | Compiles the contracts with Hardhat and runs the contract test suite               |
 | Frontend Build                | Code Quality Checks | Installs dependencies and produces the production web build (no test step)         |
-
-There is currently no CI job for the mobile app or for `code/ai_models`.
 
 ## Documentation
 
